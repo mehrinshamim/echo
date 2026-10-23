@@ -6,7 +6,6 @@ import LiveAudioStream from '@fugood/react-native-audio-pcm-stream';
 export const SAMPLE_RATE = 16000;
 
 let chunks: Uint8Array[] = [];
-let initialized = false;
 
 export async function ensureMicPermission(): Promise<boolean> {
   if (Platform.OS !== 'android') return true;
@@ -14,28 +13,29 @@ export async function ensureMicPermission(): Promise<boolean> {
   return res === PermissionsAndroid.RESULTS.GRANTED;
 }
 
-export function startRecording() {
+// The native module releases its AudioRecord (and nulls it) every time stop() runs,
+// so init() must be called again for every recording or the next start() is a silent no-op.
+// 4 KB buffers (~0.13 s) because the native side drops the first two buffers of each recording.
+export async function startRecording(): Promise<void> {
   chunks = [];
-  if (!initialized) {
-    LiveAudioStream.init({
-      sampleRate: SAMPLE_RATE,
-      channels: 1,
-      bitsPerSample: 16,
-      audioSource: 6,
-      bufferSize: 16 * 1024,
-      wavFile: '',
-    });
-    LiveAudioStream.on('data', (b64: string) => {
-      chunks.push(new Uint8Array(Buffer.from(b64, 'base64')));
-    });
-    initialized = true;
-  }
+  await LiveAudioStream.init({
+    sampleRate: SAMPLE_RATE,
+    channels: 1,
+    bitsPerSample: 16,
+    audioSource: 6,
+    bufferSize: 4096,
+    wavFile: '',
+  });
+  LiveAudioStream.on('data', (b64: string) => {
+    chunks.push(new Uint8Array(Buffer.from(b64, 'base64')));
+  });
   LiveAudioStream.start();
 }
 
 /** Stops and returns the whole recording as raw PCM16 plus its duration in seconds. */
 export async function stopRecording(): Promise<{ pcm: ArrayBuffer; seconds: number }> {
   await LiveAudioStream.stop();
+  await new Promise((r) => setTimeout(r, 300)); // let the native thread release the mic
   const total = chunks.reduce((n, c) => n + c.length, 0);
   const out = new Uint8Array(total);
   let off = 0;

@@ -46,13 +46,18 @@ export default function App() {
       if (!(await ensureMicPermission())) return setError('Microphone permission denied');
       setText('');
       setStats(null);
-      startRecording();
-      setRecording(true);
+      try {
+        await startRecording();
+        setRecording(true);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
       return;
     }
     setRecording(false);
     run('Transcribing…', async () => {
       const { pcm, seconds } = await stopRecording();
+      if (seconds < 0.5) throw new Error('Recording too short, speak for at least 1 second');
       const res = await transcribe(pcm);
       setText(res.text || '(no speech detected)');
       setStats({ audioSec: seconds, transcribeSec: res.ms / 1000 });
