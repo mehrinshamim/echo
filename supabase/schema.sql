@@ -1,5 +1,6 @@
 -- Echo database schema. Run once in Supabase: SQL Editor -> New query -> paste -> Run.
 -- Every table has user_id (filled from the logged-in user) and RLS so users only see their own rows.
+-- Then run every file in supabase/migrations/ in order (002_ui.sql, ...).
 
 create extension if not exists vector;
 
