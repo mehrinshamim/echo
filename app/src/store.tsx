@@ -45,6 +45,8 @@ type Store = State & {
   writeDraft: string;
   setWriteDraft: (text: string | ((prev: string) => string)) => void;
   completeOnboarding: () => void;
+  /** Sign-in's Back pill: shows the onboarding screen again. */
+  reopenOnboarding: () => void;
   signIn: () => void;
   signOut: () => void;
   addLog: (log: Log) => void;
@@ -95,6 +97,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const actions = useMemo(
     () => ({
       completeOnboarding: () => patch(() => ({ onboarded: true })),
+      reopenOnboarding: () => patch(() => ({ onboarded: false })),
       // Stub until Supabase Google auth exists: seeds demo history on first sign-in.
       signIn: () =>
         patch((s) => ({

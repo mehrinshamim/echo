@@ -16,7 +16,7 @@ export function Segmented<K extends string>({ options, value, onChange }: Props<
             onPress={() => onChange(o.key)}
             style={[s.seg, on && s.segOn]}
           >
-            <Text style={[type.label, { color: on ? colors.onInk : colors.ink }]}>{o.label}</Text>
+            <Text style={[type.tab, { color: on ? colors.onInk : colors.ink }]}>{o.label}</Text>
           </Pressable>
         );
       })}
@@ -29,10 +29,10 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     borderWidth: border.width,
     borderColor: border.color,
-    borderRadius: radius.pill,
+    borderRadius: radius.small,
     backgroundColor: colors.card,
-    padding: 3,
+    overflow: 'hidden',
   },
-  seg: { flex: 1, height: size.tap - 6, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill },
+  seg: { flex: 1, height: size.tap, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card },
   segOn: { backgroundColor: colors.ink },
 });

@@ -5,6 +5,8 @@ import { border, colors, pressed, radius, size, space, type } from '../theme';
 
 type Props = { label?: string; onPress?: () => void; onInk?: boolean };
 
+const ICON = 18;
+
 export function BackPill({ label = 'Back', onPress, onInk }: Props) {
   const fg = onInk ? colors.onInk : colors.ink;
   return (
@@ -12,10 +14,10 @@ export function BackPill({ label = 'Back', onPress, onInk }: Props) {
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress ?? (() => (router.canGoBack() ? router.back() : router.replace('/')))}
-      style={({ pressed: p }) => [s.pill, { borderColor: fg, opacity: p ? pressed : 1 }]}
+      style={({ pressed: p }) => [s.pill, { borderColor: fg, opacity: p ? pressed : 1 }, !onInk && s.card]}
     >
-      <Feather name="arrow-left" size={size.icon} color={fg} />
-      <Text style={[type.label, { color: fg }]}>{label}</Text>
+      <Feather name="arrow-left" size={ICON} color={fg} />
+      <Text style={[type.tab, { color: fg }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -26,9 +28,11 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.xs,
-    paddingHorizontal: space.m,
+    paddingLeft: space.s,
+    paddingRight: space.m + 2,
     borderRadius: radius.pill,
     borderWidth: border.width,
     alignSelf: 'flex-start',
   },
+  card: { backgroundColor: colors.card },
 });
