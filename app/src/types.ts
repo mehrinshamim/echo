@@ -10,6 +10,7 @@ export type Log = {
   themeIds: string[];
   source: 'voice' | 'typed' | 'mixed';
   saved: boolean; // false while it is still a Result the user has not saved
+  seconds?: number; // length of the voice capture, when there was one
 };
 
 export type Theme = { id: string; name: string; createdAt: string };

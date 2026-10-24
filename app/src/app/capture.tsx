@@ -27,7 +27,7 @@ export default function Capture() {
   // mode=append: called from WriteLog; the transcript goes below the typed text instead of a new Result.
   const { mode } = useLocalSearchParams<{ mode?: string }>();
   const append = mode === 'append';
-  const { logs, themes, addLog, setWriteDraft } = useStore();
+  const { logs, themes, addLog, addWriteCapture } = useStore();
   const insets = useSafeAreaInsets();
   const [phase, setPhase] = useState<Phase>(isModelReady() ? 'recording' : 'preparing');
   const [sec, setSec] = useState(0);
@@ -95,7 +95,7 @@ export default function Capture() {
       const { text } = await transcribe(pcm);
       if (!text) throw new Error('No speech detected. Try again a little closer to the mic.');
       if (append) {
-        setWriteDraft((prev) => (prev.trim() ? `${prev.trimEnd()}\n\n${text}` : text));
+        addWriteCapture({ text, seconds });
         router.back();
         return;
       }
@@ -103,7 +103,7 @@ export default function Capture() {
       const analysis = await analyzeLog(text, themes, logs);
       setStep(STEPS.length);
       const id = newId('lg');
-      addLog({ id, createdAt: new Date().toISOString(), transcript: text, source: 'voice', saved: false, ...analysis });
+      addLog({ id, createdAt: new Date().toISOString(), transcript: text, source: 'voice', saved: false, seconds, ...analysis });
       router.replace(`/log/${id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

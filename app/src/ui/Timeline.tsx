@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { border, colors, pressed, radius, Section, size, space, type } from '../theme';
 
-export type TimelineItem = { id: string; date?: string; title: string; text?: string };
+export type TimelineItem = { id: string; date?: string; title: string; meta?: string; text?: string };
 
 type Props = {
   items: TimelineItem[];
@@ -36,10 +36,11 @@ export function Timeline({ items, section, onPress, color, variant = 'cards', da
               </View>
             ) : (
               <>
-                {!!it.date && <Text style={type.label}>{it.date}</Text>}
+                {!!it.date && <Text style={[type.label, s.secondary]}>{it.date}</Text>}
                 <Text style={cards ? type.bodyStrong : [type.bodyStrong, s.plainTitle]}>{it.title}</Text>
               </>
             )}
+            {!!it.meta && <Text style={type.meta}>{it.meta}</Text>}
             {!!it.text && (
               <Text style={type.body} numberOfLines={3}>
                 {it.text}
@@ -83,4 +84,5 @@ const s = StyleSheet.create({
   dot: { position: 'absolute', left: DOT_OVERHANG, width: size.dot, height: size.dot, borderRadius: size.dot / 2 },
   split: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.s },
   grow: { flex: 1 },
+  secondary: { color: colors.textSecondary },
 });

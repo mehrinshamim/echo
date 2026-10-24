@@ -9,7 +9,7 @@ import type { Style } from '@/types';
 import { Card } from '@/ui/Card';
 import { Chip } from '@/ui/Chip';
 import { Header } from '@/ui/Header';
-import { IconButton } from '@/ui/IconButton';
+import { SendButton } from '@/ui/SendButton';
 import { StylePickerSheet } from '@/ui/StylePickerSheet';
 
 const IDEAS = [
@@ -28,13 +28,14 @@ function closestStyle(prompt: string, styles: Style[]): Style | undefined {
 
 /** New post: say what to write (logs, themes) and how (a style), then Echo drafts it. */
 export default function PostChat() {
-  const params = useLocalSearchParams<{ styleId?: string }>();
+  const params = useLocalSearchParams<{ styleId?: string; logId?: string; logIds?: string }>();
   const { logs, themes, styles, addDraft } = useStore();
   const insets = useSafeAreaInsets();
   const [prompt, setPrompt] = useState('');
   const [styleId, setStyleId] = useState<string | undefined>(params.styleId);
   const [themeIds, setThemeIds] = useState<string[]>([]);
-  const [logIds, setLogIds] = useState<string[]>([]);
+  // Opened from a log or an answer: start with those logs as the "what to say".
+  const [logIds, setLogIds] = useState<string[]>(() => (params.logIds ?? params.logId ?? '').split(',').filter(Boolean));
   const [picker, setPicker] = useState<'theme' | 'log' | null>(null);
   const [sheet, setSheet] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -146,7 +147,7 @@ export default function PostChat() {
           <Chip section="logs" label="Log" dashed onPress={() => setPicker(picker === 'log' ? null : 'log')} />
           <Chip section="themes" label="Theme" dashed onPress={() => setPicker(picker === 'theme' ? null : 'theme')} />
           <View style={s.grow} />
-          <IconButton icon="arrow-up" label="Write it" onPress={() => write(prompt)} />
+          <SendButton label="Write it" onPress={() => write(prompt)} disabled={busy || !prompt.trim()} />
         </View>
       </View>
 

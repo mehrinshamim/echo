@@ -18,7 +18,7 @@ const THEME_LIMIT = 6;
 const GRID_GAP = 10;
 
 export default function Home() {
-  const { user, logs, themes, chats, dismissedNoticeFor, dismissNotice, setWriteDraft } = useStore();
+  const { user, logs, themes, chats, dismissedNoticeFor, dismissNotice, resetWrite } = useStore();
   const insets = useSafeAreaInsets();
   const saved = useMemo(() => logs.filter((l) => l.saved), [logs]);
   const week = useMemo(() => weekSummary(saved, themes), [saved, themes]);
@@ -128,7 +128,7 @@ export default function Home() {
       <CaptureBar
         bottomInset={insets.bottom}
         onType={() => {
-          setWriteDraft('');
+          resetWrite();
           router.push('/write');
         }}
         onCapture={() => router.push('/capture')}

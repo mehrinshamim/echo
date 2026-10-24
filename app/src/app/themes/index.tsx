@@ -1,7 +1,7 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { shortDate } from '@/format';
+import { ago } from '@/format';
 import { useStore } from '@/store';
 import { colors, layout, space, type } from '@/theme';
 import { Header } from '@/ui/Header';
@@ -26,7 +26,7 @@ export default function Themes() {
           <ThemeCard
             key={t.id}
             name={t.name}
-            meta={`${count} ${count === 1 ? 'log' : 'logs'}${last ? ` · last ${shortDate(last)}` : ''}`}
+            meta={`${count} ${count === 1 ? 'log' : 'logs'}${last ? ` · ${ago(last)}` : ''}`}
             onPress={() => router.push(`/themes/${t.id}`)}
           />
         ))}

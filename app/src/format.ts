@@ -20,6 +20,12 @@ export const timeOfDay = (iso: string) =>
 export const clock = (sec: number) =>
   `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
 
+/** "1 min" for a voice log; "typed" when it has no recording. */
+export const durationLabel = (seconds?: number) =>
+  seconds ? `${Math.max(1, Math.round(seconds / 60))} min` : 'typed';
+
+export const wordCount = (text: string) => text.trim().split(/\s+/).filter(Boolean).length;
+
 /** "Saturday, 24 October" */
 export function fullDate(d = new Date()): string {
   const weekday = d.toLocaleDateString('en-GB', { weekday: 'long' });

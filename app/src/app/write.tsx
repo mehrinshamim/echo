@@ -1,45 +1,67 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { analyzeLog } from '@/api';
+import { clock } from '@/format';
 import { newId, useStore } from '@/store';
 import { colors, layout, space, type } from '@/theme';
+import { BackPill } from '@/ui/BackPill';
 import { Button } from '@/ui/Button';
-import { Header } from '@/ui/Header';
 
-/** WriteLog: a plain note editor. Capture appends a transcript below what you typed. */
+const BAR = 3;
+
+/** WriteLog: a plain note editor. Capture adds a transcript block below what you typed. */
 export default function WriteLog() {
-  const { writeDraft, setWriteDraft, logs, themes, addLog } = useStore();
+  const { writeDraft, setWriteDraft, writeCaptures, resetWrite, logs, themes, addLog } = useStore();
   const insets = useSafeAreaInsets();
-  const [usedVoice, setUsedVoice] = useState(false);
+  const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
+  const date = new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  const captured = writeCaptures.map((c) => c.text);
+  const text = [writeDraft.trim(), ...captured].filter(Boolean).join('\n\n');
 
-  const done = async () => {
-    const text = writeDraft.trim();
+  const save = async () => {
     if (!text) return router.back();
     setBusy(true);
-    const analysis = await analyzeLog(text, themes, logs);
-    const id = newId('lg');
-    addLog({
-      id,
-      createdAt: new Date().toISOString(),
-      transcript: text,
-      source: usedVoice ? 'mixed' : 'typed',
-      saved: false,
-      ...analysis,
-    });
-    setWriteDraft('');
-    router.replace(`/log/${id}`);
+    try {
+      const analysis = await analyzeLog(text, themes, logs);
+      const id = newId('lg');
+      addLog({
+        id,
+        createdAt: new Date().toISOString(),
+        transcript: text,
+        source: writeCaptures.length ? 'mixed' : 'typed',
+        saved: false,
+        seconds: writeCaptures.reduce((n, c) => n + c.seconds, 0) || undefined,
+        ...analysis,
+        title: title.trim() || analysis.title,
+      });
+      resetWrite();
+      router.replace(`/log/${id}`);
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <Header back="Home" />
-      <View style={s.body}>
-        <Text style={type.meta}>New log</Text>
+      <View style={[s.header, { paddingTop: insets.top + space.s }]}>
+        <BackPill label="Back" />
+        <Button label={busy ? 'Saving…' : 'Save'} onPress={save} disabled={busy || !text} style={s.save} />
+      </View>
+      <ScrollView contentContainerStyle={s.body} keyboardShouldPersistTaps="handled">
+        <Text style={type.meta}>New log · {date}</Text>
         <TextInput
-          style={[type.body, s.input]}
+          style={s.title}
+          value={title}
+          onChangeText={setTitle}
+          placeholder="Title"
+          placeholderTextColor={colors.placeholder}
+          accessibilityLabel="Title"
+        />
+        <TextInput
+          style={[type.bodyLg, s.input]}
           value={writeDraft}
           onChangeText={setWriteDraft}
           placeholder="What's on your mind?"
@@ -47,20 +69,27 @@ export default function WriteLog() {
           multiline
           autoFocus
           textAlignVertical="top"
+          accessibilityLabel="Log text"
         />
-      </View>
-      <View style={[s.actions, { paddingBottom: insets.bottom + space.m }]}>
+        {writeCaptures.map((c, i) => (
+          <View key={i} style={s.capture}>
+            <View style={s.bar} />
+            <View style={s.captureBody}>
+              <Text style={[type.label, { color: colors.logs.line }]}>From capture · {clock(c.seconds)}</Text>
+              <Text style={type.bodyLg}>{c.text}</Text>
+            </View>
+          </View>
+        ))}
+      </ScrollView>
+      <View style={[s.footer, { paddingBottom: insets.bottom + space.m }]}>
+        <Text style={[type.meta, s.hint]}>Talk to add more. It goes below your text.</Text>
         <Button
           label="Capture"
           icon="mic"
-          variant="secondary"
-          onPress={() => {
-            setUsedVoice(true);
-            router.push({ pathname: '/capture', params: { mode: 'append' } });
-          }}
-          style={s.flex}
+          size="footer"
+          onPress={() => router.push({ pathname: '/capture', params: { mode: 'append' } })}
+          style={s.capBtn}
         />
-        <Button label={busy ? 'Saving…' : 'Done'} icon="check" disabled={busy || !writeDraft.trim()} onPress={done} style={s.flex} />
       </View>
     </KeyboardAvoidingView>
   );
@@ -68,8 +97,23 @@ export default function WriteLog() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  body: { flex: 1, paddingHorizontal: layout.gutter, gap: space.s },
-  input: { flex: 1, paddingTop: 0 },
-  actions: { flexDirection: 'row', gap: space.m, paddingHorizontal: layout.gutter, paddingTop: space.m },
-  flex: { flex: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: layout.gutter, paddingBottom: space.s + 2 },
+  save: { height: 44, paddingHorizontal: space.xl },
+  body: { paddingHorizontal: layout.gutter + 2, paddingTop: space.xs, paddingBottom: space.xl, gap: space.m },
+  title: { fontFamily: 'Archivo_800ExtraBold', fontSize: 26, letterSpacing: -0.52, color: colors.ink, padding: 0 },
+  input: { padding: 0, minHeight: 96 },
+  capture: { flexDirection: 'row', gap: space.m },
+  bar: { width: BAR, borderRadius: 2, backgroundColor: colors.logs.line },
+  captureBody: { flex: 1, gap: 6 },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.s,
+    paddingHorizontal: layout.gutter - 4,
+    paddingTop: space.s + 2,
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
+  },
+  hint: { flex: 1, lineHeight: 19 },
+  capBtn: { paddingLeft: space.m + 2, paddingRight: space.l + 2 },
 });

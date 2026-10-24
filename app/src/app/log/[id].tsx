@@ -1,17 +1,16 @@
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
 import { relatedLogs } from '@/api';
-import { dayLabel, timeOfDay } from '@/format';
-import { useStore } from '@/store';
+import { durationLabel, shortDate, wordCount } from '@/format';
+import { newId, useStore } from '@/store';
 import { border, colors, layout, radius, size, space, type } from '@/theme';
 import type { Log } from '@/types';
+import { BackPill } from '@/ui/BackPill';
 import { Button } from '@/ui/Button';
-import { Card } from '@/ui/Card';
 import { Chip } from '@/ui/Chip';
-import { Header } from '@/ui/Header';
 import { Segmented } from '@/ui/Segmented';
 import { Timeline } from '@/ui/Timeline';
 
@@ -22,12 +21,12 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'rel', label: 'Related' },
 ];
 const COPIED_MS = 1500;
-const SOURCE: Record<Log['source'], string> = { voice: 'Captured', typed: 'Typed', mixed: 'Typed + captured' };
+const BAR = 3;
 
 /** Result of a capture (unsaved) and the detail view of a saved log: same screen, same tabs. */
 export default function LogScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { logs, themes, updateLog, removeLog, addTheme } = useStore();
+  const { logs, themes, updateLog, removeLog, addTheme, addChat } = useStore();
   const insets = useSafeAreaInsets();
   const log = logs.find((l) => l.id === id);
   const [tab, setTab] = useState<Tab>('tx');
@@ -46,7 +45,9 @@ export default function LogScreen() {
   if (!log) {
     return (
       <View style={s.root}>
-        <Header />
+        <View style={[s.top, { paddingTop: insets.top + space.s }]}>
+          <BackPill label="Home" />
+        </View>
         <Text style={[type.body, s.pad]}>This log no longer exists.</Text>
       </View>
     );
@@ -71,72 +72,83 @@ export default function LogScreen() {
     setNewTheme('');
     setPicking(false);
   };
+  const askAboutThis = () => {
+    const chatId = newId('ch');
+    addChat({ id: chatId, createdAt: new Date().toISOString(), title: 'New chat', themeIds: [], logIds: [log.id], messages: [] });
+    router.push(`/chats/${chatId}`);
+  };
   const unpicked = themes.filter((t) => !log.themeIds.includes(t.id));
+  const day = new Date(log.createdAt).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  const themeName = (l: Log) => themes.find((t) => t.id === l.themeIds[0])?.name;
 
   return (
     <View style={s.root}>
-      <Header back={log.saved ? 'Back' : 'Discard'} onBack={log.saved ? undefined : discard} />
       <ScrollView
-        contentContainerStyle={[s.content, { paddingBottom: insets.bottom + space.xxxl * 3 }]}
+        contentContainerStyle={[s.content, { paddingTop: insets.top + space.s, paddingBottom: space.xl }]}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={type.meta}>
-          {dayLabel(log.createdAt)} · {timeOfDay(log.createdAt)} · {SOURCE[log.source]}
-        </Text>
+        <View style={s.row}>
+          <BackPill label={log.saved ? 'Home' : 'Discard'} onPress={log.saved ? () => router.replace('/') : discard} />
+          <Text style={type.meta}>
+            {day} · {durationLabel(log.seconds)}
+          </Text>
+        </View>
         <Text style={type.h1}>{log.title}</Text>
         <Segmented options={TABS} value={tab} onChange={setTab} />
 
         {tab === 'tx' && (
-          <Card style={s.gap}>
-            <View style={s.row}>
-              <Text style={type.label}>Transcript · tap to fix words</Text>
+          <View style={s.panel}>
+            <View style={s.panelHead}>
+              <Text style={type.label}>Transcript · {wordCount(log.transcript)} words</Text>
               <Button
                 label={copied ? 'Copied' : 'Copy'}
-                icon={copied ? 'check' : 'copy'}
-                variant="secondary"
+                icon="copy"
                 onPress={copy}
                 style={s.copy}
               />
             </View>
             <TextInput
-              style={[type.body, s.transcript]}
+              style={[type.bodyLg, s.transcript]}
               value={log.transcript}
               onChangeText={(transcript) => set({ transcript })}
               multiline
               scrollEnabled={false}
+              textAlignVertical="top"
             />
-          </Card>
+          </View>
         )}
 
         {tab === 'sum' && (
-          <>
-            <Card style={s.gap}>
-              <Text style={type.label}>Title</Text>
-              <TextInput style={type.h2} value={log.title} onChangeText={(title) => set({ title })} />
-            </Card>
-            <Card style={s.gap}>
-              <Text style={type.label}>Themes</Text>
+          <View style={s.sections}>
+            <View style={s.block}>
+              <Text style={[type.label, s.secondary]}>Title</Text>
+              <TextInput style={[type.bodyStrong, s.field]} value={log.title} onChangeText={(title) => set({ title })} />
+            </View>
+            <View style={s.block}>
+              <Text style={[type.label, s.secondary]}>Themes · tap to edit</Text>
               <View style={s.chips}>
                 {log.themeIds.map((tid) => {
                   const t = themes.find((x) => x.id === tid);
                   return t ? (
                     <Chip
                       key={tid}
+                      large
                       section="themes"
                       label={t.name}
                       onRemove={() => set({ themeIds: log.themeIds.filter((x) => x !== tid) })}
                     />
                   ) : null;
                 })}
-                {!picking && <Chip section="themes" label="Theme" add onPress={() => setPicking(true)} />}
+                {!picking && <Chip large dashed section="themes" label="Add theme" onPress={() => setPicking(true)} />}
               </View>
               {picking && (
-                <View style={s.gap}>
+                <View style={s.block}>
                   {unpicked.length > 0 && (
                     <View style={s.chips}>
                       {unpicked.map((t) => (
                         <Chip
                           key={t.id}
+                          large
                           section="themes"
                           label={t.name}
                           add
@@ -150,7 +162,7 @@ export default function LogScreen() {
                   )}
                   <View style={s.row}>
                     <TextInput
-                      style={[type.body, s.field]}
+                      style={[type.body, s.field, s.grow]}
                       value={newTheme}
                       onChangeText={setNewTheme}
                       placeholder="New theme name"
@@ -158,87 +170,135 @@ export default function LogScreen() {
                       onSubmitEditing={addThemeByName}
                       returnKeyType="done"
                     />
-                    <Button label="Add" variant="secondary" onPress={addThemeByName} />
+                    <Button label="Add" variant="secondary" size="sm" onPress={addThemeByName} />
                   </View>
                 </View>
               )}
-            </Card>
-            <Card style={s.gap}>
-              <Text style={type.label}>Summary</Text>
-              <Text style={type.body}>{log.summary}</Text>
-            </Card>
-            <Card style={s.gap}>
-              <Text style={type.label}>Key points</Text>
+            </View>
+            <View style={s.block}>
+              <Text style={[type.label, s.secondary]}>Summary</Text>
+              <Text style={type.bodyLg}>{log.summary}</Text>
+            </View>
+            <View style={s.block}>
+              <Text style={[type.label, s.secondary]}>Key points</Text>
               {log.keyPoints.map((p) => (
                 <View key={p} style={s.point}>
-                  <View style={s.bullet} />
-                  <Text style={[type.body, s.flex]}>{p}</Text>
+                  <View style={s.bar} />
+                  <Text style={[type.bodyStrong, s.grow]}>{p}</Text>
                 </View>
               ))}
-            </Card>
-          </>
+            </View>
+          </View>
         )}
 
         {tab === 'rel' && (
-          <View style={s.gap}>
-            <Text style={type.meta}>Earlier logs on the same thread</Text>
+          <View style={s.sections}>
+            <Text style={[type.bodyStrong, s.secondary]}>You've said things like this before</Text>
             {related === null ? (
               <Text style={type.body}>Looking through your logs…</Text>
             ) : related.length ? (
               <Timeline
                 section="logs"
-                items={related.map((l) => ({ id: l.id, date: dayLabel(l.createdAt), title: l.title, text: l.summary }))}
+                items={related.map((l) => ({
+                  id: l.id,
+                  date: [shortDate(l.createdAt), themeName(l)].filter(Boolean).join(' · '),
+                  title: `“${l.keyPoints[0] ?? l.title}”`,
+                }))}
                 onPress={(rid) => router.push(`/log/${rid}`)}
               />
             ) : (
               <Text style={type.body}>Nothing related yet. It will show up as you log more.</Text>
             )}
+            {!!log.themeIds[0] && (
+              <Pressable
+                accessibilityRole="link"
+                onPress={() => router.push(`/themes/${log.themeIds[0]}`)}
+                style={s.link}
+              >
+                <Text style={[type.tab, s.underline]}>See how your thinking changed</Text>
+              </Pressable>
+            )}
           </View>
         )}
       </ScrollView>
 
-      {!log.saved && (
-        <View style={[s.footer, { paddingBottom: insets.bottom + space.m }]}>
-          <Button
-            label="Save log"
-            icon="check"
-            onPress={() => {
-              set({ saved: true });
-              router.back();
-            }}
-          />
-        </View>
-      )}
+      <View style={[s.footer, { paddingBottom: insets.bottom + space.m }]}>
+        {log.saved ? (
+          <>
+            <Button label="Ask about this" variant="secondary" size="md" onPress={askAboutThis} style={s.grow} />
+            <Button
+              label="Make a post"
+              size="md"
+              onPress={() => router.push({ pathname: '/write-mode/chat', params: { logId: log.id } })}
+              style={s.grow}
+            />
+          </>
+        ) : (
+          <>
+            <Button label="Discard" variant="secondary" size="md" onPress={discard} style={s.grow} />
+            <Button
+              label="Save log"
+              size="md"
+              onPress={() => {
+                set({ saved: true });
+                router.back();
+              }}
+              style={s.grow}
+            />
+          </>
+        )}
+      </View>
     </View>
   );
 }
 
-const BULLET = 8;
-
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
+  top: { paddingHorizontal: layout.gutter },
   pad: { paddingHorizontal: layout.gutter },
-  content: { paddingHorizontal: layout.gutter, gap: layout.cardGap },
-  gap: { gap: space.m },
+  content: { paddingHorizontal: layout.gutter, gap: space.l },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.s },
+  grow: { flex: 1 },
+  secondary: { color: colors.textSecondary },
+  panel: {
+    backgroundColor: colors.card,
+    borderWidth: border.width,
+    borderColor: border.color,
+    borderRadius: radius.card,
+    overflow: 'hidden',
+  },
+  panelHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+    paddingLeft: space.l,
+    paddingRight: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
   copy: { height: size.tap, paddingHorizontal: space.l },
-  transcript: { padding: 0, textAlignVertical: 'top' },
+  transcript: { padding: space.l, minHeight: 120 },
+  sections: { gap: 18 },
+  block: { gap: space.s },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.s },
   field: {
-    flex: 1,
-    height: size.btnSecondary,
+    minHeight: size.tap,
     paddingHorizontal: space.l,
     borderWidth: border.width,
     borderColor: border.color,
-    borderRadius: radius.pill,
+    borderRadius: radius.small,
     backgroundColor: colors.card,
   },
-  point: { flexDirection: 'row', gap: space.m, alignItems: 'flex-start' },
-  bullet: { width: BULLET, height: BULLET, borderRadius: radius.pill, backgroundColor: colors.themes.line, marginTop: 8 },
-  flex: { flex: 1 },
+  point: { flexDirection: 'row', gap: space.m },
+  bar: { width: BAR, borderRadius: 2, backgroundColor: colors.logs.line },
+  link: { alignSelf: 'flex-start', minHeight: size.tap, justifyContent: 'center' },
+  underline: { textDecorationLine: 'underline' },
   footer: {
+    flexDirection: 'row',
+    gap: space.s + 2,
     paddingHorizontal: layout.gutter,
-    paddingTop: space.m,
+    paddingTop: space.s + 2,
     backgroundColor: colors.bg,
     borderTopWidth: 1,
     borderTopColor: colors.divider,

@@ -7,6 +7,8 @@ import type { Chat, Draft, Log, Piece, Platform, State, Style, MergeSuggestion }
 
 const STATE_FILE = 'echo-state.json';
 
+export type WriteCapture = { text: string; seconds: number };
+
 const empty: State = {
   onboarded: false,
   user: null,
@@ -44,6 +46,11 @@ type Store = State & {
   /** WriteLog text kept outside the screen so Capture can append a transcript to it. */
   writeDraft: string;
   setWriteDraft: (text: string | ((prev: string) => string)) => void;
+  /** Voice captures added to the WriteLog below the typed text, kept apart so each shows as its own block. */
+  writeCaptures: WriteCapture[];
+  addWriteCapture: (c: WriteCapture) => void;
+  /** Starts a fresh WriteLog: clears typed text and captures. */
+  resetWrite: () => void;
   completeOnboarding: () => void;
   /** Sign-in's Back pill: shows the onboarding screen again. */
   reopenOnboarding: () => void;
@@ -75,6 +82,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<State>(empty);
   const [ready, setReady] = useState(false);
   const [writeDraft, setWriteDraft] = useState('');
+  const [writeCaptures, setWriteCaptures] = useState<WriteCapture[]>([]);
   const loaded = useRef(false);
 
   useEffect(() => {
@@ -190,8 +198,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({ ...state, ...actions, ready, writeDraft, setWriteDraft }),
-    [state, actions, ready, writeDraft],
+    () => ({
+      ...state,
+      ...actions,
+      ready,
+      writeDraft,
+      setWriteDraft,
+      writeCaptures,
+      addWriteCapture: (c: WriteCapture) => setWriteCaptures((prev) => [...prev, c]),
+      resetWrite: () => {
+        setWriteDraft('');
+        setWriteCaptures([]);
+      },
+    }),
+    [state, actions, ready, writeDraft, writeCaptures],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

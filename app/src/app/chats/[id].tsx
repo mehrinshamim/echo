@@ -12,21 +12,47 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Clipboard from 'expo-clipboard';
+import Feather from '@expo/vector-icons/Feather';
 import { ask } from '@/api';
 import { shortDate } from '@/format';
 import { useStore } from '@/store';
 import { border, colors, layout, radius, size, space, type } from '@/theme';
+import type { Citation, Message } from '@/types';
+import { BackPill } from '@/ui/BackPill';
+import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
 import { Chip } from '@/ui/Chip';
 import { CitationPill } from '@/ui/CitationPill';
-import { Header } from '@/ui/Header';
-import { IconButton } from '@/ui/IconButton';
+import { SendButton } from '@/ui/SendButton';
 import { StylePickerSheet } from '@/ui/StylePickerSheet';
 
-const SUGGESTIONS = ['What did I learn at hackathons?', 'How has my confidence changed?', 'What keeps coming up lately?'];
+const SUGGESTIONS = [
+  'What did I learn at hackathons this month?',
+  'What do I keep saying about open source?',
+  'Prepare me for my next event',
+];
 const PICK_LIMIT = 8;
+const SWATCH = 14;
+const USER_RADII = { borderTopLeftRadius: 20, borderTopRightRadius: 20, borderBottomLeftRadius: 20, borderBottomRightRadius: 6 };
 
-/** A chat answers only from your logs. + Theme / + Log narrow the context it reads. */
+/** Renders an answer with its [n] markers as inline citation pills. */
+function AnswerText({ text, citations, onOpen }: { text: string; citations?: Citation[]; onOpen: (logId: string) => void }) {
+  const parts = text.split(/\[(\d+)\]/);
+  return (
+    <Text style={[type.bodyLg, s.answerText]}>
+      {parts.map((part, i) => {
+        if (i % 2 === 0) return part;
+        const c = citations?.find((x) => x.n === Number(part));
+        return c ? (
+          <Text key={i}> <CitationPill n={c.n} onPress={() => onOpen(c.logId)} /></Text>
+        ) : null;
+      })}
+    </Text>
+  );
+}
+
+/** A chat answers only from your logs. + Theme / + Log narrow the context it reads; + Style sets a voice. */
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { chats, logs, themes, styles, updateChat } = useStore();
@@ -40,9 +66,11 @@ export default function ChatScreen() {
 
   if (!chat) {
     return (
-      <View style={s.root}>
-        <Header />
-        <Text style={[type.body, s.pad]}>This chat no longer exists.</Text>
+      <View style={[s.root, { paddingTop: insets.top + space.s }]}>
+        <View style={s.padded}>
+          <BackPill label="Chats" />
+        </View>
+        <Text style={[type.body, s.padded]}>This chat no longer exists.</Text>
       </View>
     );
   }
@@ -58,12 +86,15 @@ export default function ChatScreen() {
     if (!question || busy) return;
     setQ('');
     setBusy(true);
-    const withQ = [...chat.messages, { role: 'user' as const, text: question }];
-    updateChat(chat.id, { messages: withQ, title: chat.messages.length ? chat.title : question });
-    const { answer, citations } = await ask(question, scoped());
-    updateChat(chat.id, { messages: [...withQ, { role: 'assistant', text: answer, citations }] });
-    setBusy(false);
-    setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 50);
+    try {
+      const withQ = [...chat.messages, { role: 'user' as const, text: question }];
+      updateChat(chat.id, { messages: withQ, title: chat.messages.length ? chat.title : question });
+      const { answer, citations } = await ask(question, scoped());
+      updateChat(chat.id, { messages: [...withQ, { role: 'assistant', text: answer, citations }] });
+      setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 50);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const pickOptions =
@@ -73,159 +104,320 @@ export default function ChatScreen() {
         ? saved.filter((l) => !chat.logIds.includes(l.id)).slice(0, PICK_LIMIT).map((l) => ({ id: l.id, label: l.title }))
         : [];
 
-  return (
-    <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <Header back="Chats" />
-      <View style={s.context}>
-        <Text style={type.meta}>
-          {chat.themeIds.length || chat.logIds.length ? 'Answering from' : 'Answering from all your logs'}
-        </Text>
-        <View style={s.chips}>
-          {chat.themeIds.map((tid) => (
-            <Chip
-              key={tid}
-              section="themes"
-              label={themes.find((t) => t.id === tid)?.name ?? 'Theme'}
-              onRemove={() => updateChat(chat.id, { themeIds: chat.themeIds.filter((x) => x !== tid) })}
-            />
-          ))}
-          {chat.logIds.map((lid) => (
-            <Chip
-              key={lid}
-              section="logs"
-              label={logs.find((l) => l.id === lid)?.title ?? 'Log'}
-              onRemove={() => updateChat(chat.id, { logIds: chat.logIds.filter((x) => x !== lid) })}
-            />
-          ))}
-          {chat.styleId && (
-            <Chip
-              section="styles"
-              label={styles.find((st) => st.id === chat.styleId)?.name ?? 'Style'}
-              onRemove={() => updateChat(chat.id, { styleId: undefined })}
-            />
-          )}
-          <Chip section="chats" label="Theme" add onPress={() => setPicker(picker === 'theme' ? null : 'theme')} />
-          <Chip section="chats" label="Log" add onPress={() => setPicker(picker === 'log' ? null : 'log')} />
-          <Chip section="chats" label="Style" add onPress={() => setStyleSheet(true)} />
-        </View>
-        {picker && (
-          <Card style={s.picker}>
-            {pickOptions.length ? (
-              pickOptions.map((o) => (
-                <Pressable
-                  key={o.id}
-                  style={s.pickRow}
-                  onPress={() => {
-                    updateChat(
-                      chat.id,
-                      picker === 'theme' ? { themeIds: [...chat.themeIds, o.id] } : { logIds: [...chat.logIds, o.id] },
-                    );
-                    setPicker(null);
-                  }}
-                >
-                  <Text style={type.bodyStrong} numberOfLines={1}>
-                    {o.label}
-                  </Text>
-                </Pressable>
-              ))
-            ) : (
-              <Text style={type.meta}>Nothing left to add.</Text>
-            )}
-          </Card>
-        )}
-      </View>
+  const contextChips = (
+    <>
+      {chat.themeIds.map((tid) => (
+        <Chip
+          key={tid}
+          section="themes"
+          label={themes.find((t) => t.id === tid)?.name ?? 'Theme'}
+          onRemove={() => updateChat(chat.id, { themeIds: chat.themeIds.filter((x) => x !== tid) })}
+        />
+      ))}
+      {chat.logIds.map((lid) => (
+        <Chip
+          key={lid}
+          section="logs"
+          label={logs.find((l) => l.id === lid)?.title ?? 'Log'}
+          onRemove={() => updateChat(chat.id, { logIds: chat.logIds.filter((x) => x !== lid) })}
+        />
+      ))}
+      {chat.styleId && (
+        <Chip
+          section="styles"
+          label={styles.find((st) => st.id === chat.styleId)?.name ?? 'Style'}
+          onRemove={() => updateChat(chat.id, { styleId: undefined })}
+        />
+      )}
+      <Chip section="chats" label="Theme" add onPress={() => setPicker(picker === 'theme' ? null : 'theme')} />
+      <Chip section="chats" label="Log" add onPress={() => setPicker(picker === 'log' ? null : 'log')} />
+      <Chip section="chats" label="Style" add onPress={() => setStyleSheet(true)} />
+    </>
+  );
 
-      <ScrollView ref={scroll} contentContainerStyle={s.messages} keyboardShouldPersistTaps="handled">
-        {!chat.messages.length &&
-          SUGGESTIONS.map((sug) => (
-            <Pressable key={sug} onPress={() => send(sug)} style={s.suggestion}>
-              <Text style={type.bodyStrong}>↳ {sug}</Text>
+  const pickerCard = picker && (
+    <Card style={s.picker}>
+      {pickOptions.length ? (
+        pickOptions.map((o) => (
+          <Pressable
+            key={o.id}
+            style={s.pickRow}
+            onPress={() => {
+              updateChat(
+                chat.id,
+                picker === 'theme' ? { themeIds: [...chat.themeIds, o.id] } : { logIds: [...chat.logIds, o.id] },
+              );
+              setPicker(null);
+            }}
+          >
+            <Text style={type.bodyStrong} numberOfLines={1}>
+              {o.label}
+            </Text>
+          </Pressable>
+        ))
+      ) : (
+        <Text style={type.meta}>Nothing left to add.</Text>
+      )}
+    </Card>
+  );
+
+  const sheet = (
+    <StylePickerSheet
+      visible={styleSheet}
+      styles={styles}
+      selectedId={chat.styleId}
+      onSelect={(styleId) => updateChat(chat.id, { styleId })}
+      onClose={() => setStyleSheet(false)}
+    />
+  );
+
+  // New chat: intro, suggestions and a composer card, as in the design.
+  if (!chat.messages.length) {
+    return (
+      <KeyboardAvoidingView
+        style={[s.root, { paddingTop: insets.top + space.s, paddingBottom: insets.bottom + space.s }]}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <View style={[s.padded, s.topRow]}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={() => router.back()} style={s.close}>
+            <Feather name="x" size={18} color={colors.ink} />
+          </Pressable>
+          <View style={s.titleRow}>
+            <View style={s.swatch} />
+            <Text style={type.h2}>New chat</Text>
+          </View>
+          <View style={s.close} />
+        </View>
+        <View style={[s.padded, s.intro]}>
+          <Text style={type.h1}>Ask your logs</Text>
+          <Text style={[type.body, s.secondary]}>
+            Answers only use what you've said, and every line links back to the log it came from.
+          </Text>
+        </View>
+        <View style={s.spacer} />
+        <View style={s.padded}>
+          {SUGGESTIONS.map((sug) => (
+            <Pressable key={sug} accessibilityRole="button" onPress={() => send(sug)} style={s.suggestion}>
+              <Text style={s.arrow}>↳</Text>
+              <Text style={[type.bodyStrong, s.flex]}>{sug}</Text>
             </Pressable>
           ))}
-        {chat.messages.map((m, i) =>
+        </View>
+        {pickerCard && <View style={s.padded}>{pickerCard}</View>}
+        <View style={[s.composer, s.padded2]}>
+          <TextInput
+            style={[type.bodyLg, s.composerInput]}
+            value={q}
+            onChangeText={setQ}
+            placeholder="Ask anything"
+            placeholderTextColor={colors.placeholder}
+            onSubmitEditing={() => send(q)}
+            returnKeyType="send"
+          />
+          <View style={s.chips}>
+            {contextChips}
+            <View style={s.flex} />
+            <SendButton onPress={() => send(q)} disabled={busy || !q.trim()} />
+          </View>
+        </View>
+        {sheet}
+      </KeyboardAvoidingView>
+    );
+  }
+
+  // Conversation: user bubbles, unboxed answers with inline citations, sources and actions.
+  const theme = themes.find((t) => t.id === chat.themeIds[0]);
+  return (
+    <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <ScrollView
+        ref={scroll}
+        contentContainerStyle={[s.messages, { paddingTop: insets.top + space.s }]}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={s.topRow}>
+          <BackPill label="Chats" />
+          {theme && (
+            <View style={s.tag}>
+              <Text style={[type.label, s.tagText]}>{theme.name}</Text>
+            </View>
+          )}
+        </View>
+        <View style={s.contextRow}>{contextChips}</View>
+        {pickerCard}
+        {chat.messages.map((m: Message, i) =>
           m.role === 'user' ? (
             <View key={i} style={s.user}>
               <Text style={type.bodyStrong}>{m.text}</Text>
             </View>
           ) : (
-            <Card key={i} fill={colors.chats.fill} style={s.answer}>
-              <Text style={type.body}>{m.text}</Text>
+            <View key={i} style={s.reply}>
+              <AnswerText text={m.text} citations={m.citations} onOpen={(lid) => router.push(`/log/${lid}`)} />
               {!!m.citations?.length && (
                 <View style={s.sources}>
+                  <Text style={[type.label, s.secondary]}>From your logs</Text>
                   {m.citations.map((c) => (
-                    <Pressable key={c.n} style={s.source} onPress={() => router.push(`/log/${c.logId}`)}>
-                      <CitationPill n={c.n} onPress={() => router.push(`/log/${c.logId}`)} />
-                      <Text style={[type.meta, s.flex]} numberOfLines={1}>
-                        {c.title} · {shortDate(c.date)}
+                    <Pressable key={c.n} accessibilityRole="button" style={s.source} onPress={() => router.push(`/log/${c.logId}`)}>
+                      <View style={s.badge}>
+                        <Text style={s.badgeText}>{c.n}</Text>
+                      </View>
+                      <Text style={[type.bodyStrong, s.flex]} numberOfLines={1}>
+                        {c.title}
                       </Text>
+                      <Text style={type.meta}>{shortDate(c.date)}</Text>
                     </Pressable>
                   ))}
+                  <View style={s.actions}>
+                    <Button label="Copy" variant="secondary" onPress={() => Clipboard.setStringAsync(m.text)} style={s.actionBtn} />
+                    <Button
+                      label="Make a post"
+                      onPress={() =>
+                        router.push({
+                          pathname: '/write-mode/chat',
+                          params: { logIds: m.citations!.map((c) => c.logId).join(',') },
+                        })
+                      }
+                      style={s.actionBtn}
+                    />
+                  </View>
                 </View>
               )}
-            </Card>
+            </View>
           ),
         )}
         {busy && <Text style={type.meta}>Searching your logs…</Text>}
       </ScrollView>
-
-      <View style={[s.inputBar, { paddingBottom: insets.bottom + space.m }]}>
+      <View style={[s.followUp, { paddingBottom: insets.bottom + space.m }]}>
         <TextInput
-          style={[type.body, s.input]}
+          style={[type.body, s.followInput]}
           value={q}
           onChangeText={setQ}
-          placeholder="Ask about your logs"
+          placeholder="Ask a follow-up"
           placeholderTextColor={colors.placeholder}
           onSubmitEditing={() => send(q)}
           returnKeyType="send"
         />
-        <IconButton icon="arrow-up" label="Send" onPress={() => send(q)} />
+        {!!q.trim() && <SendButton onPress={() => send(q)} disabled={busy} />}
       </View>
-      <StylePickerSheet
-        visible={styleSheet}
-        styles={styles}
-        selectedId={chat.styleId}
-        onSelect={(styleId) => updateChat(chat.id, { styleId })}
-        onClose={() => setStyleSheet(false)}
-      />
+      {sheet}
     </KeyboardAvoidingView>
   );
 }
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  pad: { paddingHorizontal: layout.gutter },
-  context: { paddingHorizontal: layout.gutter, gap: space.s, paddingBottom: space.m },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.s },
-  picker: { paddingVertical: space.xs },
+  padded: { paddingHorizontal: layout.gutter },
+  padded2: { marginHorizontal: layout.gutter },
+  flex: { flex: 1 },
+  spacer: { flex: 1 },
+  secondary: { color: colors.textSecondary },
+  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: size.tap },
+  close: {
+    width: size.tap,
+    height: size.tap,
+    borderRadius: radius.pill,
+    borderWidth: border.width,
+    borderColor: border.color,
+    backgroundColor: colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: space.s },
+  swatch: {
+    width: SWATCH,
+    height: SWATCH,
+    borderRadius: 4,
+    backgroundColor: colors.chats.fill,
+    borderWidth: border.width,
+    borderColor: border.color,
+  },
+  intro: { gap: space.m - 2, marginTop: space.l + 2 },
+  suggestion: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.m + 2,
+    minHeight: 52,
+    paddingVertical: space.s,
+    paddingHorizontal: space.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  arrow: { fontFamily: 'Archivo_700Bold', fontSize: 18, color: colors.chats.line },
+  picker: { paddingVertical: space.xs, marginBottom: space.s },
   pickRow: { minHeight: size.tap, justifyContent: 'center', borderBottomWidth: 1, borderBottomColor: colors.divider },
-  messages: { paddingHorizontal: layout.gutter, gap: layout.cardGap, paddingBottom: space.l },
-  suggestion: { minHeight: size.tap, justifyContent: 'center' },
+  composer: {
+    marginTop: space.s,
+    backgroundColor: colors.card,
+    borderWidth: border.width,
+    borderColor: border.color,
+    borderRadius: 22,
+    paddingTop: space.m + 2,
+    paddingLeft: space.l,
+    paddingRight: space.s + 2,
+    paddingBottom: space.s + 2,
+    gap: space.m,
+  },
+  composerInput: { padding: 0, minHeight: 28 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
+  contextRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
+  messages: { paddingHorizontal: layout.gutter, paddingBottom: space.xl, gap: space.l },
+  tag: {
+    height: 32,
+    paddingHorizontal: space.m,
+    borderRadius: 16,
+    backgroundColor: colors.themes.fill,
+    borderWidth: border.width,
+    borderColor: border.color,
+    justifyContent: 'center',
+  },
+  tagText: { fontSize: 13 },
   user: {
     alignSelf: 'flex-end',
-    maxWidth: '85%',
+    maxWidth: '82%',
+    backgroundColor: colors.chats.fill,
+    borderWidth: border.width,
+    borderColor: border.color,
+    ...USER_RADII,
+    paddingVertical: space.m,
+    paddingHorizontal: space.l,
+  },
+  reply: { gap: space.l },
+  answerText: { lineHeight: 28 },
+  sources: { gap: space.s },
+  source: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.m,
+    minHeight: size.tap,
     padding: space.m,
-    borderRadius: radius.tile,
+    borderRadius: radius.small,
     borderWidth: border.width,
     borderColor: border.color,
     backgroundColor: colors.card,
   },
-  answer: { gap: space.m },
-  sources: { gap: space.s },
-  source: { flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: size.tap },
-  flex: { flex: 1 },
-  inputBar: {
-    flexDirection: 'row',
-    gap: space.s,
+  badge: {
+    width: size.citation,
+    height: size.citation,
+    borderRadius: size.citation / 2,
+    backgroundColor: colors.logs.fill,
+    borderWidth: border.width,
+    borderColor: border.color,
     alignItems: 'center',
-    paddingHorizontal: layout.gutter,
-    paddingTop: space.s,
-    borderTopWidth: 1,
-    borderTopColor: colors.divider,
+    justifyContent: 'center',
   },
-  input: {
+  badgeText: { fontFamily: 'Archivo_700Bold', fontSize: 12 },
+  actions: { flexDirection: 'row', gap: space.s },
+  actionBtn: { height: size.tap, paddingHorizontal: space.l },
+  followUp: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.s,
+    paddingHorizontal: layout.gutter - 4,
+    paddingTop: space.s,
+  },
+  followInput: {
     flex: 1,
-    height: size.btnSecondary,
-    paddingHorizontal: space.l,
+    height: size.btnMd,
+    paddingHorizontal: space.xl,
     borderRadius: radius.pill,
     borderWidth: border.width,
     borderColor: border.color,
