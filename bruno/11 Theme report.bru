@@ -1,0 +1,19 @@
+meta {
+  name: 11 Theme report
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{baseUrl}}/themes/{{themeId}}/report
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+docs {
+  S09 How it changed. First call is slow, then cached.
+}

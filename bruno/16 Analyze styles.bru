@@ -1,0 +1,23 @@
+meta {
+  name: 16 Analyze styles
+  type: http
+  seq: 16
+}
+
+post {
+  url: {{baseUrl}}/styles/analyze
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+script:post-response {
+  if (res.body.styles && res.body.styles[0]) bru.setVar("styleId", res.body.styles[0].id);
+}
+
+docs {
+  S15 -> S16. Slow (one SMART call). Saves styleId.
+}

@@ -1,0 +1,25 @@
+meta {
+  name: 7 Add theme to log
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/logs/{{logId}}/themes
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Open source"
+  }
+}
+
+docs {
+  S06 + Add theme.
+}

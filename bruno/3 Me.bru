@@ -1,0 +1,19 @@
+meta {
+  name: 3 Me
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/me
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+docs {
+  Expected: {"user_id": "..."} matching your user on the Supabase Users page.
+}

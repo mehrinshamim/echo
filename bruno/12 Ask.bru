@@ -1,0 +1,31 @@
+meta {
+  name: 12 Ask
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{baseUrl}}/chats
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "question": "What did I learn at hackathons?",
+    "theme_ids": [],
+    "log_ids": []
+  }
+}
+
+script:post-response {
+  if (res.body.chat_id) bru.setVar("chatId", res.body.chat_id);
+}
+
+docs {
+  S10 -> S11. Saves chatId.
+}

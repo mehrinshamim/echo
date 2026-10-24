@@ -1,0 +1,38 @@
+meta {
+  name: 15 Add pieces
+  type: http
+  seq: 15
+}
+
+post {
+  url: {{baseUrl}}/pieces
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "items": [
+      {
+        "text": "I almost didn't write any code at the hackathon.\n\nI sat at the back for an hour.\n\nThen a mentor asked what I was stuck on. One question changed my weekend.\n\nAsk early. It's the fastest way in.",
+        "source_label": "Pasted"
+      },
+      {
+        "text": "I was scared to open my first PR.\n\nIt was a typo fix. The maintainer merged it in an hour.\n\nSmall counts. Start there.",
+        "source_label": "Pasted"
+      },
+      {
+        "text": "Debugging flaky tests in Wikidata: a walkthrough. The test suite failed roughly one run in ten. This post explains how we isolated the race condition in the fixture setup, the tooling we used to reproduce it reliably, and the two-line fix that resolved it.",
+        "source_label": "Medium link"
+      }
+    ]
+  }
+}
+
+docs {
+  S14. Pending until analyzed.
+}

@@ -1,0 +1,15 @@
+meta {
+  name: 14 List chats
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{baseUrl}}/chats
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}

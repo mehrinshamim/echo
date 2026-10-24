@@ -1,0 +1,19 @@
+meta {
+  name: 21 Save draft
+  type: http
+  seq: 21
+}
+
+post {
+  url: {{baseUrl}}/drafts/{{draftId}}/save
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+docs {
+  S13 Save for later.
+}

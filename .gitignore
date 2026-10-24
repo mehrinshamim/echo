@@ -1,2 +1,7 @@
 doc-ignore/
 CLAUDE.md
+ref/
+backend/.env
+.venv/
+__pycache__/
+backend/logs/

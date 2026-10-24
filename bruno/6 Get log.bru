@@ -1,0 +1,19 @@
+meta {
+  name: 6 Get log
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/logs/{{logId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+docs {
+  S06 with related logs.
+}

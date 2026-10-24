@@ -1,0 +1,19 @@
+meta {
+  name: 5 List logs
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/logs
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+docs {
+  S08. Add ?q=hackathon to search, ?before=<created_at> for the next page.
+}

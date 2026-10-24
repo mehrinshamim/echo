@@ -1,0 +1,19 @@
+meta {
+  name: 10 Get theme
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/themes/{{themeId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+docs {
+  S09 header + All logs.
+}

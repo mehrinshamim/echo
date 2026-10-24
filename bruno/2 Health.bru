@@ -1,0 +1,15 @@
+meta {
+  name: 2 Health
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/health
+  body: none
+  auth: none
+}
+
+docs {
+  Is the backend running? Expected: {"ok": true}. No login needed.
+}

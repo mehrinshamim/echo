@@ -1,0 +1,19 @@
+meta {
+  name: 18 Get style
+  type: http
+  seq: 18
+}
+
+get {
+  url: {{baseUrl}}/styles/{{styleId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+docs {
+  S17.
+}

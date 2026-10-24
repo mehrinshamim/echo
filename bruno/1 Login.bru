@@ -1,0 +1,38 @@
+meta {
+  name: 1 Login
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{supabaseUrl}}/auth/v1/token?grant_type=password
+  body: json
+  auth: none
+}
+
+params:query {
+  grant_type: password
+}
+
+headers {
+  apikey: {{anonKey}}
+}
+
+body:json {
+  {
+    "email": "{{email}}",
+    "password": "{{password}}"
+  }
+}
+
+script:post-response {
+  // Save the access token so the other requests can send it (kept in memory only)
+  if (res.body.access_token) {
+    bru.setVar("token", res.body.access_token);
+  }
+}
+
+docs {
+  Logs in to Supabase as your test user and saves the access token.
+  Run this first, and again when other requests give 401 (tokens last 1 hour).
+}

@@ -1,0 +1,35 @@
+meta {
+  name: 19 Create draft
+  type: http
+  seq: 19
+}
+
+post {
+  url: {{baseUrl}}/drafts
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "prompt": "A LinkedIn post about the Wikimedia hackathon",
+    "style_id": null,
+    "log_ids": [
+      "{{logId}}"
+    ],
+    "theme_ids": [],
+    "kind": "linkedin"
+  }
+}
+
+script:post-response {
+  if (res.body.id) bru.setVar("draftId", res.body.id);
+}
+
+docs {
+  S18 -> S13. style_id null = Let Echo choose. Saves draftId.
+}
