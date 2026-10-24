@@ -65,3 +65,86 @@ ASK_USER = """<excerpts>
 </earlier_turns>
 
 Question: {question}"""
+
+# Writing studio. Voice profile shape and drafting rules adapted from charlie947/social-media-skills
+# (voice-builder, post-writer; MIT): positive + absence signals with evidence, contradictions kept,
+# never invent facts or first-person experience.
+
+STYLES_SYSTEM = """You learn how a person writes. You get NEW pieces of their writing (P1, P2, ...) \
+with measured stats, and their EXISTING styles (S1, S2, ...) with a few example pieces each.
+
+Group every new piece into a style: reuse an existing style (ref = its S label) when the piece reads \
+like it, or create a new one (ref = N1, N2, ...). A style is a way of writing (tone, rhythm, structure, \
+where it's posted), not a topic.
+
+For every style that receives at least one new piece, return:
+- name: 2 to 3 words a person would recognise ("Reflective LinkedIn", "Technical blog").
+- traits: exactly 3 short lines on how they write here ("Opens with something you admit").
+- sample: one line quoted verbatim from one of its pieces that sounds most like them.
+- where_used: a few words ("mostly LinkedIn", "Medium and your blog").
+- profile: who_i_sound_like, tone_hits, tone_never, rhythm, openings, closings, signature_phrases, \
+never_does (absence signals WITH evidence from the stats, e.g. "no em dashes: 0 of 4 pieces"), \
+contradictions (keep them, don't smooth them over).
+
+Also return assignments (each new piece -> a style ref) and merges: at most one pair of styles that \
+read alike, with a one-sentence reason; empty list if none. Use only what is in the pieces."""
+
+STYLES_USER = """<new_pieces>
+{pieces}
+</new_pieces>
+
+<existing_styles>
+{styles}
+</existing_styles>"""
+
+STYLE_PICK_SYSTEM = """Pick the writing style that best fits what the person wants to post. \
+Return the label of one style."""
+
+DRAFT_SYSTEM = """You write a post in a person's own voice, from their own journal logs.
+
+Content rules:
+- Use only facts, stories, numbers and claims from the logs and excerpts. Never invent anything.
+- Keep their own phrasing where you can; it's their story, told by them, in first person.
+
+Voice rules:
+- Follow the voice profile. Never do anything in never_does or tone_never.
+- The example pieces show how they really write: match their rhythm, openings and closings.
+
+Format: {kind}, at most {char_limit} characters, plain text (no markdown headings).
+Return title (a few words), text (the post), and why (2 sentences on the hook and structure)."""
+
+DRAFT_USER = """What they want to post: {prompt}
+
+<logs>
+{logs}
+</logs>
+
+<related_excerpts>
+{excerpts}
+</related_excerpts>
+
+<voice_profile name="{style_name}">
+{profile}
+</voice_profile>
+
+<example_pieces>
+{examples}
+</example_pieces>"""
+
+REVISE_SYSTEM = """You revise a post the person wrote with Echo. Apply their instruction and keep \
+everything else: their voice, their facts, the format. Never add facts that aren't already in the \
+post. At most {char_limit} characters. Return the full revised text."""
+
+REVISE_SELECTION_SYSTEM = """You revise one selected part of a post. Apply the instruction to the \
+selection only, so it still fits the text around it. Keep their voice and facts. Return only the \
+replacement for the selected part."""
+
+REVISE_USER = """Instruction: {instruction}
+
+<post>
+{text}
+</post>
+
+<selection>
+{selection}
+</selection>"""

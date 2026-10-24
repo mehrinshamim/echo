@@ -70,6 +70,16 @@ class Settings(BaseSettings):
     chat_title_chars: int = 60
     chat_history_turns: int = 2  # earlier question/answer pairs sent with a follow-up
 
+    # Writing studio
+    max_piece_chars: int = 20000
+    max_pieces_per_upload: int = 20
+    style_excerpt_chars: int = 1500  # of each piece sent to the LLM
+    post_char_limit: int = 3000
+    story_char_limit: int = 280
+    draft_logs_per_theme: int = 5
+    draft_log_chars: int = 2000
+    draft_related_chunks: int = 4
+
     cors_origins: list[str] = ["*"]
 
     def provider_key(self, provider: str) -> str:
