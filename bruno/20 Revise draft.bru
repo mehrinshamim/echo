@@ -1,0 +1,25 @@
+meta {
+  name: 20 Revise draft
+  type: http
+  seq: 20
+}
+
+post {
+  url: {{baseUrl}}/drafts/{{draftId}}/revise
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "instruction": "Shorter"
+  }
+}
+
+docs {
+  S13 revision chips / Ask for changes.
+}

@@ -1,0 +1,15 @@
+meta {
+  name: 9 List themes
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/themes
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}

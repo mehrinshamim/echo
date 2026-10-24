@@ -1,0 +1,32 @@
+meta {
+  name: 4 Create log
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/logs
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "text": "Wikimedia hackathon. A mentor pointed me to a small bug in a citation tool and I fixed it in two hours. Skill wasn't the blocker. Not knowing where to start was.",
+    "duration_s": 60,
+    "source": "voice"
+  }
+}
+
+script:post-response {
+  if (res.body.id) bru.setVar("logId", res.body.id);
+  if (res.body.themes && res.body.themes[0]) bru.setVar("themeId", res.body.themes[0].id);
+}
+
+docs {
+  S05/S06. Saves logId and the first themeId for the requests below. Add "created_at" to fake past dates.
+}

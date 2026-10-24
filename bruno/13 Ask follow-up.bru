@@ -1,0 +1,21 @@
+meta {
+  name: 13 Ask follow-up
+  type: http
+  seq: 13
+}
+
+post {
+  url: {{baseUrl}}/chats/{{chatId}}/messages
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "question": "And what should I do differently next time?"
+  }
+}

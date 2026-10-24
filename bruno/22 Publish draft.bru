@@ -1,0 +1,26 @@
+meta {
+  name: 22 Publish draft
+  type: http
+  seq: 22
+}
+
+post {
+  url: {{baseUrl}}/drafts/{{draftId}}/publish
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "platform": "linkedin",
+    "url": null
+  }
+}
+
+docs {
+  SH2.
+}

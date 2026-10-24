@@ -1,0 +1,19 @@
+meta {
+  name: 8 Home
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/home
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+docs {
+  S03: counts, top themes, nudge.
+}

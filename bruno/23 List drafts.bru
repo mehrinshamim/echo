@@ -1,0 +1,19 @@
+meta {
+  name: 23 List drafts
+  type: http
+  seq: 23
+}
+
+get {
+  url: {{baseUrl}}/drafts?status=published
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+docs {
+  S12 tabs: draft | saved | published.
+}

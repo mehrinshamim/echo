@@ -1,11 +1,11 @@
 meta {
-  name: 6 Get entry
+  name: 6 Get log
   type: http
   seq: 6
 }
 
 get {
-  url: {{baseUrl}}/entries/{{entryId}}
+  url: {{baseUrl}}/logs/{{logId}}
   body: none
   auth: bearer
 }
@@ -15,5 +15,5 @@ auth:bearer {
 }
 
 docs {
-  Opens the last entry made with "4 Create entry".
+  S06 with related logs.
 }
