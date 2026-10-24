@@ -1,6 +1,6 @@
 # Echo backend
 
-FastAPI + Supabase (Postgres, pgvector, auth). Schema: `../supabase/schema.sql`.
+FastAPI + Supabase (Postgres, pgvector, auth). Schema: `supabase/schema.sql`.
 
 ## Setup
 ```bash
@@ -26,7 +26,7 @@ curl -s localhost:8000/me -H "Authorization: Bearer $TOKEN"
 Expected: `{"user_id":"<uuid>"}`. A bad token gives 401 `Invalid or expired token`; no header gives 401 `Missing bearer token`. Tokens expire after 1 hour.
 
 ## Database
-Run `../supabase/schema.sql`, then every file in `../supabase/migrations/` in order, in the Supabase SQL editor.
+Run `supabase/schema.sql`, then every file in `supabase/migrations/` in order, in the Supabase SQL editor.
 
 ## Seed demo data
 With the server running:
@@ -38,4 +38,4 @@ Loads ~18 backdated logs, prints nearest-neighbour similarities (use them to set
 
 ## Test everything
 Open `../bruno` in Bruno (environment Local), run `1 Login`, then any request. Endpoint contract: `API.md`.
-Architecture: `../ARCHITECTURE.md`. Raw LLM replies are logged to `logs/llm.log`.
+Architecture: `ARCHITECTURE.md`. Raw LLM replies are logged to `logs/llm.log`.

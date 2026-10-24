@@ -31,22 +31,23 @@ You can also ask Echo questions about your own history. Answers come with citati
 | On-device speech | `whisper.rn` (whisper.cpp, `base.en`), `@fugood/react-native-audio-pcm-stream` for mic PCM, `expo-file-system` for model storage |
 | Auth & client data | Supabase Auth (Google sign-in), `@supabase/supabase-js`, AsyncStorage |
 | Backend (`backend/`) | Python 3.12, FastAPI (async), Pydantic settings, Uvicorn, managed with `uv` |
-| Database (`supabase/`) | Supabase Postgres, pgvector (HNSW indexes), SQL functions `match_chunks` / `match_entries`, row-level security |
+| Database (`backend/supabase/`) | Supabase Postgres, pgvector (HNSW indexes), SQL functions `match_chunks` / `match_entries`, row-level security |
 | AI | OpenAI-compatible client with Gemini (dev), OpenAI (demo) and Groq (backup chat); separate fast/smart model tiers and embeddings |
-| Deploy & testing | Render blueprint (`render.yaml`), Bruno API collection (`bruno/`) |
+| Deploy & testing | Render blueprint (`backend/render.yaml`), Bruno API collection (`backend/bruno/`) |
 
 ## Repository layout
 
 ```
-app/            Expo app (screens in src/app, recorder.ts, transcribe.ts, api.ts)
-backend/        FastAPI service (routes, llm.py, prompts.py, config.py, scripts/)
-supabase/       schema.sql and migrations
-bruno/          API request collection for manual testing
-ARCHITECTURE.md             how it all fits together, flow by flow
-APP_API_GUIDE.md            API reference for the app
-ui-ux-flow-for-backend.md   screens and the data each one needs
-API_INTEGRATION_PLAN.md     plan for wiring the app to the API
-render.yaml                 Render deployment blueprint
+app/                        Expo app (screens in src/app, recorder.ts, transcribe.ts, api.ts)
+backend/                    everything server-side
+  app/                      FastAPI service (routes, llm.py, prompts.py, config.py)
+  scripts/                  demo seeding and helpers
+  supabase/                 schema.sql and migrations
+  bruno/                    API request collection for manual testing
+  ARCHITECTURE.md           how it all fits together, flow by flow
+  APP_API_GUIDE.md          API reference for the app
+  API.md                    short API summary
+  render.yaml               Render deployment blueprint (set rootDir to backend)
 ```
 
 ## Architecture in brief
@@ -56,7 +57,7 @@ Phone (Expo) ── mic → whisper.rn (on-device) ── text + JWT ──► F
                                                                   └──────► LLM / embedding providers
 ```
 
-Features are fixed pipelines (load data, make one or two structured LLM calls, save) rather than autonomous agents, which keeps them predictable, cheap and easy to debug. See [ARCHITECTURE.md](ARCHITECTURE.md) for details.
+Features are fixed pipelines (load data, make one or two structured LLM calls, save) rather than autonomous agents, which keeps them predictable, cheap and easy to debug. See [backend/ARCHITECTURE.md](backend/ARCHITECTURE.md) for details.
 
 ## Getting started
 
@@ -69,7 +70,7 @@ uv sync
 uv run uvicorn app.main:app --reload
 ```
 
-Apply `supabase/schema.sql` (and any migrations) to your Supabase project first. See [backend/README.md](backend/README.md) for migrations, demo seeding and Bruno usage.
+Apply `backend/supabase/schema.sql` (and any migrations) to your Supabase project first. See [backend/README.md](backend/README.md) for migrations, demo seeding and Bruno usage.
 
 ### App
 
