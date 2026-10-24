@@ -1,5 +1,6 @@
 import { initWhisper, WhisperContext } from 'whisper.rn/index';
 import { Directory, File, Paths } from 'expo-file-system';
+import { SAMPLE_RATE } from './recorder';
 
 export type ModelId = 'tiny.en' | 'base.en';
 
@@ -13,6 +14,9 @@ export const MODELS: Record<ModelId, { url: string; label: string }> = {
     label: 'base.en (~142 MB, more accurate)',
   },
 };
+
+/** base.en passed the on-device test (RTF 0.08 on a real phone), so the app uses it. */
+export const DEFAULT_MODEL: ModelId = 'base.en';
 
 export type TranscribeResult = { text: string; ms: number };
 
@@ -39,11 +43,30 @@ export async function loadModel(id: ModelId): Promise<void> {
   ctxId = id;
 }
 
+export const isModelReady = () => ctx !== null;
+
+let preparing: Promise<void> | null = null;
+
+/** Downloads (first run only) and loads the default model. Safe to call many times. */
+export function ensureModel(): Promise<void> {
+  if (ctx) return Promise.resolve();
+  preparing ??= (async () => {
+    await downloadModel(DEFAULT_MODEL);
+    await loadModel(DEFAULT_MODEL);
+  })().finally(() => {
+    preparing = null;
+  });
+  return preparing;
+}
+
 /** pcm: raw 16 kHz mono signed 16-bit PCM. Swap this function for a hosted Whisper call if local fails. */
 export async function transcribe(pcm: ArrayBuffer): Promise<TranscribeResult> {
   if (!ctx) throw new Error('Model not loaded');
   const start = Date.now();
   const { promise } = ctx.transcribeData(pcm, { language: 'en' });
   const { result } = await promise;
-  return { text: result.trim(), ms: Date.now() - start };
+  const ms = Date.now() - start;
+  const audioSec = pcm.byteLength / 2 / SAMPLE_RATE;
+  console.log(`[whisper] model=${ctxId} audio=${audioSec.toFixed(1)}s took=${(ms / 1000).toFixed(1)}s`);
+  return { text: result.trim(), ms };
 }
