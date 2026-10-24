@@ -25,15 +25,17 @@ curl -s localhost:8000/me -H "Authorization: Bearer $TOKEN"
 ```
 Expected: `{"user_id":"<uuid>"}`. A bad token gives 401 `Invalid or expired token`; no header gives 401 `Missing bearer token`. Tokens expire after 1 hour.
 
-## Test entries (needs a real LLM key in .env)
+## Database
+Run `../supabase/schema.sql`, then every file in `../supabase/migrations/` in order, in the Supabase SQL editor.
+
+## Seed demo data
+With the server running:
 ```bash
-post() { curl -s localhost:8000/entries -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d "$1"; echo; }
-
-post '{"transcript":"I keep wondering if I should quit my job to build my own product. The salary is safe but I feel stuck.", "created_at":"2026-09-01T09:00:00Z"}'
-post '{"transcript":"Talked to a founder today. Starting a company sounds lonely, maybe I am romanticising leaving my job.", "created_at":"2026-09-20T09:00:00Z"}'
-post '{"transcript":"Made pasta from scratch for the first time. Too much flour but it was fun."}'
-post '{"transcript":"Still thinking about leaving work to build something. I think fear, not money, is what holds me back."}'
-
-curl -s localhost:8000/entries -H "Authorization: Bearer $TOKEN"
+SEED_EMAIL=you@example.com SEED_PASSWORD=... uv run python -m scripts.seed          # add --wipe to start clean
 ```
-Expected: the career entries share a theme, the pasta entry gets its own, and the last entry returns `echoes` pointing at the September entries. If echoes are empty, lower `ECHO_THRESHOLD` in .env (default 0.75).
+Loads ~18 backdated logs, prints nearest-neighbour similarities (use them to set `ECHO_THRESHOLD` and
+`ASK_MIN_SIMILARITY` in .env), and pre-generates the theme reports.
+
+## Test everything
+Open `../bruno` in Bruno (environment Local), run `1 Login`, then any request. Endpoint contract: `API.md`.
+Architecture: `../ARCHITECTURE.md`. Raw LLM replies are logged to `logs/llm.log`.
