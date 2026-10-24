@@ -1,6 +1,6 @@
 # Echo architecture
 
-How Echo works end to end: what runs where, what happens on each user action, how the data is stored, and why it is built this way. Status markers: **[built]** = code exists, **[planned]** = in the current build plan, **[cut]** = not in the hackathon build.
+How Echo works end to end: what runs where, what happens on each user action, how the data is stored, and why it is built this way. Status markers: **[built]** = code exists, **[built]** = in the current build plan, **[cut]** = not in the hackathon build.
 
 ---
 
@@ -49,7 +49,7 @@ App ── every API call: Authorization: Bearer <token> ──► FastAPI
 FastAPI deps.get_user ── "who is this?" ──► Supabase Auth ──► user id
 ```
 
-### F2 Capture a log by voice (S04 → S05 → S06) [built, being reshaped to /logs]
+### F2 Capture a log by voice (S04 → S05 → S06) [built]
 ```
 S04  record + transcribe on the phone (no network)
 S05  POST /logs {text, duration_s, source:"voice"}
@@ -65,10 +65,10 @@ S05  POST /logs {text, duration_s, source:"voice"}
 S06  Transcript / Summary / Related tabs read from that response or GET /logs/{id}
 ```
 
-### F3 Type a log (S07) [planned]
+### F3 Type a log (S07) [built]
 Same `POST /logs` with `source:"typed"` (or `"mixed"` when speech was appended) and the user's own title.
 
-### F4 Browse (S03 Home, S08 Logs, S09 Theme) [planned]
+### F4 Browse (S03 Home, S08 Logs, S09 Theme) [built]
 ```
 S03  GET /home     → counts (logs, themes, chats), top 6 themes, "Echo noticed" nudge
                      nudge = a theme with 3+ logs in the last 7 days (plain SQL, no LLM)
@@ -77,7 +77,7 @@ S09  GET /themes/{id}         → theme + its logs
      GET /themes/{id}/report  → evolution report (see section 5)
 ```
 
-### F5 Ask (S10 → S11) [planned]
+### F5 Ask (S10 → S11) [built]
 ```
 POST /chats {question, theme_ids?, log_ids?}
   1. embed the question
@@ -88,7 +88,7 @@ POST /chats {question, theme_ids?, log_ids?}
 ◄── {text, citations:[{n, log_id, title, date}]}   follow-ups: POST /chats/{id}/messages
 ```
 
-### F6 Upload writing → styles (S14 → S15 → S16/S17) [planned]
+### F6 Upload writing → styles (S14 → S15 → S16/S17) [built]
 ```
 POST /pieces {items:[{text, title, source_label}]}   pasted or .md/.txt text, saved as "pending"
 POST /styles/analyze
@@ -98,7 +98,7 @@ POST /styles/analyze
 GET /styles, GET /styles/{id}, rename, merge, move a piece
 ```
 
-### F7 Create, edit, publish a post (S18 → S13 → SH2 → S12) [planned]
+### F7 Create, edit, publish a post (S18 → S13 → SH2 → S12) [built]
 ```
 POST /drafts {prompt, style_id | auto, log_ids, theme_ids}
   auto style → FAST call picks the closest style
@@ -118,20 +118,20 @@ POST /drafts/{id}/publish {platform,url} → Published tab + the post becomes a 
 | File | Job | Status |
 |---|---|---|
 | `backend/app/main.py` | Creates the app, CORS, mounts routers, `/health`, `/me` | built |
-| `backend/app/config.py` | Every setting from `.env`: Supabase, providers, models, thresholds, limits | built (provider split planned) |
+| `backend/app/config.py` | Every setting from `.env`: Supabase, providers, models, thresholds, limits | built |
 | `backend/app/deps.py` | `get_user`: verifies the JWT, returns a DB client that acts as that user | built |
-| `backend/app/llm.py` | `chat_json()` (structured JSON output, validated) and `embed()` | built (hardening planned) |
+| `backend/app/llm.py` | `chat_json()` (structured JSON output, validated) and `embed()` | built |
 | `backend/app/prompts.py` | All prompt text | built (grows per feature) |
-| `backend/app/routes/logs.py` | Save/list/search/read logs, edit title and themes | built as `entries.py`, rename planned |
-| `backend/app/routes/home.py` | Counts, top themes, nudge | planned |
-| `backend/app/routes/themes.py` | Theme list/detail, evolution report | planned |
-| `backend/app/routes/chats.py` | Ask with citations, chat history | planned |
-| `backend/app/routes/styles.py` | Pieces, style analysis, style management | planned |
-| `backend/app/routes/drafts.py` | Generate, edit, revise, save, publish posts | planned |
-| `supabase/schema.sql` | Tables, row-level security, vector indexes, search functions | built (UI migration planned) |
-| `backend/scripts/seed.py` | Loads ~18 realistic backdated logs for the demo | planned |
+| `backend/app/routes/logs.py` | Save/list/search/read logs, edit title and themes | built |
+| `backend/app/routes/home.py` | Counts, top themes, nudge | built |
+| `backend/app/routes/themes.py` | Theme list/detail, rename, evolution report | built |
+| `backend/app/routes/chats.py` | Ask with citations, chat history | built |
+| `backend/app/routes/styles.py` | Pieces, style analysis, style management | built |
+| `backend/app/routes/drafts.py` | Generate, edit, revise, save, publish posts | built |
+| `supabase/schema.sql` | Tables, row-level security, vector indexes, search functions | built (+ `migrations/002_ui.sql`) |
+| `backend/scripts/seed.py` | Loads ~18 realistic backdated logs for the demo | built |
 | `bruno/` | Click-to-run API requests for testing | built |
-| `backend/API.md` | Endpoint contract for the app team | planned |
+| `backend/API.md` | Endpoint contract for the app team | built |
 
 ---
 
@@ -216,8 +216,8 @@ More detail on each decision: `doc-ignore/why.md`.
 
 ## 8. Status and known limits
 
-**Built:** server skeleton, auth, full schema with RLS + vector search, log save pipeline (summary, themes, chunks, embeddings, related logs), Bruno collection.
-**Verified:** server starts, `/health`, routes reject missing tokens, chunker. **Not yet verified against real services:** `/me` with a real token, the log pipeline.
-**Planned in this build:** provider split + JSON hardening, UI-aligned `/logs`, home, themes + report, chats, styles, drafts, seed data, Render deploy, API contract.
-**Cut for the hackathon:** weekly summary, file (.docx/.pdf) and link import, merge undo, version history screen, account delete-all, streaming responses, offline queue.
-**Known limits:** report cache is keyed on the set of logs (editing a log's text doesn't refresh it); similarity thresholds are tuned on seed data only; free-tier rate limits make Gemini unsuitable for the live demo.
+**Built (code):** everything in sections 2–3: auth, logs pipeline with theme reuse and related logs, home + nudge, themes + cached evolution report, chats with validated citations, styles (pieces, analysis, merge), drafts (generate, edit, revise, restyle, save, publish, versions), seed script, Render blueprint, API contract, Bruno collection.
+**Verified live:** Gemini `gemini-3.5-flash-lite` returns valid strict JSON in ~2 s; Gemini embeddings return 768 dims; server starts and all routes reject missing tokens.
+**Not yet verified live:** the endpoints against the real database (needs `migrations/002_ui.sql` run first), Render deploy.
+**Cut for the hackathon:** weekly summary, file (.docx/.pdf) and link import, merge undo, account delete-all, streaming responses, offline queue.
+**Known limits:** report cache is keyed on the set of logs (editing a log's text doesn't refresh it); only the first theme chip filters Ask retrieval; similarity thresholds need tuning on seed data; Gemini free tier is slow/rate-limited for SMART models, so the demo should run on OpenAI or a fast paid model.
