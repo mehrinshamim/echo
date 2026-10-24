@@ -1,48 +1,44 @@
-// App state in one React context, persisted as JSON with expo-file-system.
-// Swap the persistence for Supabase once the backend exists; screens only see the actions below.
+// App state in one React context. Server data (logs, themes, chats, styles, drafts) is a cache of what
+// the Echo API returned; screens call src/api.ts and then put results here with the setters below.
+// Only `onboarded` and `dismissedNoticeFor` are persisted on the phone (JSON via expo-file-system).
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { File, Paths } from 'expo-file-system';
-import { seed, seedWriting } from './seed';
-import type { Chat, Draft, Log, Piece, Platform, State, Style, MergeSuggestion } from './types';
+import * as api from './api';
+import { supabase } from './supabase';
+import type { Chat, Draft, Home, LogItem, MergeSuggestion, Piece, Style, Theme } from './types';
 
 const STATE_FILE = 'echo-state.json';
 
 export type WriteCapture = { text: string; seconds: number };
-
-const empty: State = {
-  onboarded: false,
-  user: null,
-  logs: [],
-  themes: [],
-  chats: [],
-  drafts: [],
-  pieces: [],
-  styles: [],
-  mergeSuggestion: null,
-  dismissedNoticeFor: null,
-};
-
-export const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+type Local = { onboarded: boolean; dismissedNoticeFor: string | null };
+type User = { name: string; email: string };
 
 const stateFile = () => new File(Paths.document, STATE_FILE);
 
-async function load(): Promise<State> {
+async function loadLocal(): Promise<Local> {
+  const empty: Local = { onboarded: false, dismissedNoticeFor: null };
   const f = stateFile();
   if (!f.exists) return empty;
   try {
-    const saved = JSON.parse(await f.text()) as State;
-    // Unsaved results are dropped on restart, like a discarded recording.
-    // Older saves predate Write mode styles: give drafts a status and signed-in users the demo styles.
-    const drafts = (saved.drafts ?? []).map((d) => ({ ...d, status: d.status ?? 'draft', version: d.version ?? 1 }));
-    const writing = saved.styles ? {} : saved.user ? seedWriting() : {};
-    return { ...empty, ...saved, ...writing, drafts, logs: saved.logs.filter((l) => l.saved) };
+    return { ...empty, ...(JSON.parse(await f.text()) as Partial<Local>) };
   } catch {
     return empty;
   }
 }
 
-type Store = State & {
+type Store = Local & {
   ready: boolean;
+  user: User | null;
+  home: Home | null;
+  logs: LogItem[];
+  themes: Theme[];
+  chats: Chat[];
+  drafts: Draft[];
+  pieces: Piece[];
+  styles: Style[];
+  mergeSuggestion: MergeSuggestion | null;
+  /** Loads everything the tabs and pickers need. Safe to call again after changes. */
+  refresh: () => Promise<void>;
   /** WriteLog text kept outside the screen so Capture can append a transcript to it. */
   writeDraft: string;
   setWriteDraft: (text: string | ((prev: string) => string)) => void;
@@ -54,164 +50,142 @@ type Store = State & {
   completeOnboarding: () => void;
   /** Sign-in's Back pill: shows the onboarding screen again. */
   reopenOnboarding: () => void;
-  signIn: () => void;
-  signOut: () => void;
-  addLog: (log: Log) => void;
-  updateLog: (id: string, patch: Partial<Log>) => void;
-  removeLog: (id: string) => void;
-  addTheme: (name: string) => string;
-  addChat: (chat: Chat) => void;
-  updateChat: (id: string, patch: Partial<Chat>) => void;
-  addDraft: (draft: Draft) => void;
-  updateDraft: (id: string, patch: Partial<Draft>) => void;
+  signOut: () => Promise<void>;
   dismissNotice: (themeId: string) => void;
-  addPieces: (pieces: Piece[]) => void;
-  removePiece: (id: string) => void;
-  /** Store the result of analyzing pieces: marks every piece analyzed and replaces the styles. */
-  applyAnalysis: (styles: Style[], suggestion: MergeSuggestion | null) => void;
-  renameStyle: (id: string, name: string) => void;
-  mergeStyles: () => void;
-  undoMerge: () => void;
-  keepStylesSeparate: () => void;
-  publishDraft: (id: string, platform: Platform, url?: string) => void;
+  addLog: (log: LogItem) => void;
+  upsertChat: (chat: Chat) => void;
+  /** Replaces a chat by id; `next.id` may differ (a local chat becoming a server chat). */
+  replaceChat: (id: string, next: Chat) => void;
+  upsertDraft: (draft: Draft) => void;
+  setPieces: (pieces: Piece[] | ((prev: Piece[]) => Piece[])) => void;
+  setStyles: (styles: Style[]) => void;
+  setMergeSuggestion: (m: MergeSuggestion | null) => void;
 };
 
 const Ctx = createContext<Store | null>(null);
 
+const upsert = <T extends { id: string }>(list: T[], item: T) =>
+  list.some((x) => x.id === item.id) ? list.map((x) => (x.id === item.id ? { ...x, ...item } : x)) : [item, ...list];
+
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<State>(empty);
-  const [ready, setReady] = useState(false);
+  const [local, setLocal] = useState<Local>({ onboarded: false, dismissedNoticeFor: null });
+  const [localReady, setLocalReady] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [home, setHome] = useState<Home | null>(null);
+  const [logs, setLogs] = useState<LogItem[]>([]);
+  const [themes, setThemes] = useState<Theme[]>([]);
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [drafts, setDrafts] = useState<Draft[]>([]);
+  const [pieces, setPieces] = useState<Piece[]>([]);
+  const [styles, setStyles] = useState<Style[]>([]);
+  const [mergeSuggestion, setMergeSuggestion] = useState<MergeSuggestion | null>(null);
   const [writeDraft, setWriteDraft] = useState('');
   const [writeCaptures, setWriteCaptures] = useState<WriteCapture[]>([]);
   const loaded = useRef(false);
 
   useEffect(() => {
-    load().then((s) => {
-      setState(s);
+    loadLocal().then((s) => {
+      setLocal(s);
       loaded.current = true;
-      setReady(true);
+      setLocalReady(true);
     });
   }, []);
 
   useEffect(() => {
     if (!loaded.current) return;
     stateFile()
-      .write(JSON.stringify(state))
+      .write(JSON.stringify(local))
       .catch((e) => console.warn('Could not save state', e));
-  }, [state]);
+  }, [local]);
 
-  const patch = useCallback((fn: (s: State) => Partial<State>) => setState((s) => ({ ...s, ...fn(s) })), []);
+  const refresh = useCallback(async () => {
+    // Each list loads on its own, so one slow or failing call does not blank the rest.
+    const settle = <T,>(p: Promise<T>, set: (v: T) => void) => p.then(set).catch((e) => console.warn('Load failed', e));
+    await Promise.all([
+      settle(api.home(), setHome),
+      settle(api.logs(), setLogs),
+      settle(api.themes(), setThemes),
+      settle(api.chats(), (list) => setChats((prev) => [...prev.filter((c) => c.local), ...list])),
+      settle(api.styles(), setStyles),
+      settle(
+        Promise.all([api.drafts('draft'), api.drafts('saved'), api.drafts('published')]),
+        (all) => setDrafts(all.flat()),
+      ),
+      settle(api.pendingPieces(), setPieces),
+    ]);
+  }, []);
 
-  const actions = useMemo(
+  // The Supabase session is the source of truth for "signed in".
+  useEffect(() => {
+    const apply = (email: string | undefined, name: string | undefined) =>
+      setUser(email ? { name: name ?? email.split('@')[0], email } : null);
+    supabase.auth.getSession().then(({ data }) => {
+      const u = data.session?.user;
+      apply(u?.email, u?.user_metadata?.full_name);
+      setAuthReady(true);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      apply(session?.user.email, session?.user.user_metadata?.full_name);
+      if (!session) {
+        setHome(null);
+        setLogs([]);
+        setThemes([]);
+        setChats([]);
+        setDrafts([]);
+        setPieces([]);
+        setStyles([]);
+        setMergeSuggestion(null);
+      }
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  const signedInId = user?.email;
+  useEffect(() => {
+    if (signedInId) refresh();
+  }, [signedInId, refresh]);
+
+  const value = useMemo<Store>(
     () => ({
-      completeOnboarding: () => patch(() => ({ onboarded: true })),
-      reopenOnboarding: () => patch(() => ({ onboarded: false })),
-      // Stub until Supabase Google auth exists: seeds demo history on first sign-in.
-      signIn: () =>
-        patch((s) => ({
-          user: { name: 'You', email: 'google-account' },
-          ...(s.logs.length ? {} : seed()),
-          ...(s.logs.length && !s.styles.length ? seedWriting() : {}),
-        })),
-      signOut: () => patch(() => ({ user: null })),
-      addLog: (log: Log) => patch((s) => ({ logs: [log, ...s.logs] })),
-      updateLog: (id: string, p: Partial<Log>) =>
-        patch((s) => ({ logs: s.logs.map((l) => (l.id === id ? { ...l, ...p } : l)) })),
-      removeLog: (id: string) => patch((s) => ({ logs: s.logs.filter((l) => l.id !== id) })),
-      addTheme: (name: string) => {
-        const id = newId('th');
-        patch((s) => ({ themes: [...s.themes, { id, name, createdAt: new Date().toISOString() }] }));
-        return id;
-      },
-      addChat: (chat: Chat) => patch((s) => ({ chats: [chat, ...s.chats] })),
-      updateChat: (id: string, p: Partial<Chat>) =>
-        patch((s) => ({ chats: s.chats.map((c) => (c.id === id ? { ...c, ...p } : c)) })),
-      addDraft: (draft: Draft) => patch((s) => ({ drafts: [draft, ...s.drafts] })),
-      updateDraft: (id: string, p: Partial<Draft>) =>
-        patch((s) => ({ drafts: s.drafts.map((d) => (d.id === id ? { ...d, ...p } : d)) })),
-      dismissNotice: (themeId: string) => patch(() => ({ dismissedNoticeFor: themeId })),
-      addPieces: (pieces: Piece[]) => patch((s) => ({ pieces: [...pieces, ...s.pieces] })),
-      removePiece: (id: string) =>
-        patch((s) => ({
-          pieces: s.pieces.filter((p) => p.id !== id),
-          styles: s.styles.map((st) => ({ ...st, pieceIds: st.pieceIds.filter((x) => x !== id) })),
-        })),
-      applyAnalysis: (styles: Style[], suggestion: MergeSuggestion | null) =>
-        patch((s) => ({
-          styles,
-          pieces: s.pieces.map((p) => ({ ...p, analyzed: true })),
-          // A suggestion the user already answered (merged or kept separate) is not re-opened.
-          mergeSuggestion:
-            s.mergeSuggestion && s.mergeSuggestion.status !== 'open' ? s.mergeSuggestion : (suggestion ?? s.mergeSuggestion),
-        })),
-      renameStyle: (id: string, name: string) =>
-        patch((s) => ({ styles: s.styles.map((st) => (st.id === id ? { ...st, name } : st)) })),
-      mergeStyles: () =>
-        patch((s) => {
-          const m = s.mergeSuggestion;
-          const gone = m && s.styles.find((st) => st.id === m.mergeId);
-          if (!m || m.status !== 'open' || !gone) return {};
-          return {
-            styles: s.styles
-              .filter((st) => st.id !== m.mergeId)
-              .map((st) => (st.id === m.keepId ? { ...st, pieceIds: [...st.pieceIds, ...gone.pieceIds] } : st)),
-            drafts: s.drafts.map((d) => (d.styleId === m.mergeId ? { ...d, styleId: m.keepId } : d)),
-            chats: s.chats.map((c) => (c.styleId === m.mergeId ? { ...c, styleId: m.keepId } : c)),
-            mergeSuggestion: {
-              ...m,
-              status: 'merged' as const,
-              removed: gone,
-              moved: {
-                draftIds: s.drafts.filter((d) => d.styleId === m.mergeId).map((d) => d.id),
-                chatIds: s.chats.filter((c) => c.styleId === m.mergeId).map((c) => c.id),
-              },
-            },
-          };
-        }),
-      undoMerge: () =>
-        patch((s) => {
-          const m = s.mergeSuggestion;
-          if (!m || m.status !== 'merged' || !m.removed) return {};
-          const back = m.removed;
-          return {
-            styles: [
-              ...s.styles.map((st) =>
-                st.id === m.keepId ? { ...st, pieceIds: st.pieceIds.filter((x) => !back.pieceIds.includes(x)) } : st,
-              ),
-              back,
-            ],
-            drafts: s.drafts.map((d) => (m.moved?.draftIds.includes(d.id) ? { ...d, styleId: back.id } : d)),
-            chats: s.chats.map((c) => (m.moved?.chatIds.includes(c.id) ? { ...c, styleId: back.id } : c)),
-            mergeSuggestion: { ...m, status: 'open' as const, removed: undefined, moved: undefined },
-          };
-        }),
-      keepStylesSeparate: () =>
-        patch((s) => (s.mergeSuggestion ? { mergeSuggestion: { ...s.mergeSuggestion, status: 'kept' as const } } : {})),
-      publishDraft: (id: string, platform: Platform, url?: string) =>
-        patch((s) => ({
-          drafts: s.drafts.map((d) =>
-            d.id === id ? { ...d, status: 'published' as const, platform, url, publishedAt: new Date().toISOString() } : d,
-          ),
-        })),
-    }),
-    [patch],
-  );
-
-  const value = useMemo(
-    () => ({
-      ...state,
-      ...actions,
-      ready,
+      ...local,
+      ready: localReady && authReady,
+      user,
+      home,
+      logs,
+      themes,
+      chats,
+      drafts,
+      pieces,
+      styles,
+      mergeSuggestion,
+      refresh,
       writeDraft,
       setWriteDraft,
       writeCaptures,
-      addWriteCapture: (c: WriteCapture) => setWriteCaptures((prev) => [...prev, c]),
+      addWriteCapture: (c) => setWriteCaptures((prev) => [...prev, c]),
       resetWrite: () => {
         setWriteDraft('');
         setWriteCaptures([]);
       },
+      completeOnboarding: () => setLocal((s) => ({ ...s, onboarded: true })),
+      reopenOnboarding: () => setLocal((s) => ({ ...s, onboarded: false })),
+      signOut: async () => {
+        await supabase.auth.signOut();
+      },
+      dismissNotice: (themeId) => setLocal((s) => ({ ...s, dismissedNoticeFor: themeId })),
+      addLog: (log) => {
+        setLogs((prev) => upsert(prev, log));
+        setHome((h) => h && { ...h, counts: { ...h.counts, logs: h.counts.logs + 1 } });
+      },
+      upsertChat: (chat) => setChats((prev) => upsert(prev, chat)),
+      replaceChat: (id, next) => setChats((prev) => [next, ...prev.filter((c) => c.id !== id && c.id !== next.id)]),
+      upsertDraft: (draft) => setDrafts((prev) => upsert(prev, draft)),
+      setPieces,
+      setStyles,
+      setMergeSuggestion,
     }),
-    [state, actions, ready, writeDraft, writeCaptures],
+    [local, localReady, authReady, user, home, logs, themes, chats, drafts, pieces, styles, mergeSuggestion, refresh, writeDraft, writeCaptures],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -221,3 +195,6 @@ export function useStore(): Store {
   if (!s) throw new Error('useStore must be used inside StoreProvider');
   return s;
 }
+
+/** Id for a chat that exists only on the phone until its first question is sent. */
+export const localId = () => `new-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;

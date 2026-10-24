@@ -1,31 +1,54 @@
-// Shapes follow doc-ignore/BACKEND_PLAN.md (entries = logs) so the mock api can be swapped for real calls.
+// UI-side shapes. src/api.ts maps the backend's snake_case JSON (APP_API_GUIDE.md §5) into these.
 
-export type Log = {
+export type LogSource = 'voice' | 'typed' | 'mixed';
+
+export type Theme = {
+  id: string;
+  name: string;
+  description?: string;
+  logCount: number;
+  firstLogAt?: string;
+  lastLogAt?: string;
+};
+
+/** A row in a list of logs (Logs, Home, pickers): no transcript. */
+export type LogItem = {
   id: string;
   createdAt: string; // ISO
   title: string;
+  source: LogSource;
+  seconds?: number; // length of the voice capture, when there was one
+  primaryTheme?: { id: string; name: string };
+};
+
+export type RelatedLog = { logId: string; date: string; title: string; theme?: string; snippet: string };
+
+export type Log = LogItem & {
   transcript: string;
   summary: string;
   keyPoints: string[];
-  themeIds: string[];
-  source: 'voice' | 'typed' | 'mixed';
-  saved: boolean; // false while it is still a Result the user has not saved
-  seconds?: number; // length of the voice capture, when there was one
+  stance: string;
+  themes: { id: string; name: string }[];
+  related: RelatedLog[];
+  /** Only on the log just saved by POST /logs: the "Listening back" checklist counts. */
+  steps?: { themesAdded: number; relatedFound: number };
 };
-
-export type Theme = { id: string; name: string; createdAt: string };
 
 export type Citation = { n: number; logId: string; title: string; date: string; snippet: string };
 
 export type Message = { role: 'user' | 'assistant'; text: string; citations?: Citation[] };
 
+export type Answer = { chatId: string; text: string; supported: boolean; citations: Citation[] };
+
 export type Chat = {
   id: string;
-  createdAt: string;
   title: string;
   themeIds: string[];
   logIds: string[];
-  styleId?: string; // writing style chosen with "+ Style"
+  styleId?: string; // writing style chosen with "+ Style"; used by "Make a post", not sent to the chat API
+  updatedAt: string;
+  /** Not on the server yet: the first question creates it (POST /chats) and replaces this entry. */
+  local?: boolean;
   messages: Message[];
 };
 
@@ -38,8 +61,9 @@ export type Platform = 'LinkedIn' | 'Blog' | 'Other';
 export type Piece = {
   id: string;
   title: string;
-  source: string; // e.g. "LinkedIn · published 14 Oct", "Pasted · 220 words"
+  source: string; // e.g. "Pasted", "talk-notes.md"
   words: number;
+  styleId?: string; // set once analyzed
   analyzed: boolean; // false while it waits on the Upload screen
 };
 
@@ -49,49 +73,68 @@ export type Style = {
   where: string; // where it is used, e.g. "mostly LinkedIn"
   traits: string[];
   sample: string;
-  category: DraftCategory;
-  pieceIds: string[];
+  pieceCount: number;
 };
 
-/** Echo noticed two styles read alike. `removed` is kept after a merge so Undo can restore it. */
+export type StyleDetail = Style & { pieces: Piece[] };
+
+/** Echo noticed two styles read alike. "Keep separate" is remembered only on the phone. */
 export type MergeSuggestion = {
   keepId: string;
   mergeId: string;
   reason: string;
   status: 'open' | 'merged' | 'kept';
-  removed?: Style;
-  /** Drafts and chats that were moved to `keepId` by the merge, so Undo can point them back. */
-  moved?: { draftIds: string[]; chatIds: string[] };
+  /** Name of the style that was merged away, for the "Merged into" line. */
+  mergedName?: string;
 };
 
 export type Draft = {
   id: string;
-  createdAt: string;
   category: DraftCategory;
   title: string;
   text: string;
+  prompt?: string;
   logIds: string[];
+  sourceLogs: { id: string; title: string; createdAt: string }[];
+  logCount: number;
+  styleId?: string;
+  styleName?: string;
   status: DraftStatus;
   version: number;
-  styleId?: string;
-  texts?: Record<string, string>; // edited text per style, so switching style chips keeps edits
+  charLimit: number;
   platform?: Platform;
-  url?: string; // where it was posted, optional
-  publishedAt?: string;
+  url?: string;
+  createdAt: string;
+  updatedAt: string;
   savedAt?: string;
+  publishedAt?: string;
+  /** Present only on the response to POST /drafts: why Echo wrote it this way. */
+  why?: string;
 };
 
-export type ThemeReport = { summary: string; shifts: { date: string; text: string; logId: string }[] };
+export type DraftVersion = { n: number; text: string; author: 'ai' | 'user'; instruction?: string; createdAt: string };
 
-export type State = {
-  onboarded: boolean;
-  user: { name: string; email: string } | null;
-  logs: Log[];
+export type ThemeDetail = Theme & {
+  logs: { id: string; title: string; createdAt: string; seconds?: number; source: LogSource }[];
+};
+
+type Cite = { logId: string; date: string; title: string };
+export type ThemeReport =
+  | { status: 'not_enough_history'; logCount: number }
+  | {
+      status: 'ok';
+      logCount: number;
+      overview: string;
+      then: Cite & { quote: string };
+      now: Cite & { quote: string };
+      shifts: (Cite & { text: string })[];
+      openQuestion: string;
+    };
+
+export type Home = {
+  counts: { logs: number; themes: number; chats: number };
   themes: Theme[];
-  chats: Chat[];
-  drafts: Draft[];
-  pieces: Piece[];
-  styles: Style[];
-  mergeSuggestion: MergeSuggestion | null;
-  dismissedNoticeFor: string | null; // theme id whose "Echo noticed" card was dismissed
+  nudge: { themeId: string; themeName: string; count: number; window: string; message: string } | null;
 };
+
+export type Analysis = { piecesRead: number; styles: Style[]; mergeSuggestion: MergeSuggestion | null };
