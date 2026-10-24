@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { draftFrom } from '@/api';
-import { newId, useStore } from '@/store';
+import * as api from '@/api';
+import { errorText } from '@/client';
+import { useStore } from '@/store';
 import { border, colors, layout, size, space, type } from '@/theme';
-import type { Style } from '@/types';
+import type { DraftCategory } from '@/types';
 import { Card } from '@/ui/Card';
 import { Chip } from '@/ui/Chip';
 import { Header } from '@/ui/Header';
@@ -19,17 +20,17 @@ const IDEAS = [
 ];
 const PICK_LIMIT = 8;
 
-/** When no style is picked ("Let Echo choose"), match the ask to the closest style. */
-function closestStyle(prompt: string, styles: Style[]): Style | undefined {
+function inferCategory(prompt: string): DraftCategory {
   const p = prompt.toLowerCase();
-  const wanted = /thread|story/.test(p) ? 'Story' : /blog|article|post on my blog/.test(p) ? 'Blog' : 'LinkedIn';
-  return styles.find((st) => st.category === wanted) ?? styles[0];
+  if (/thread|story/.test(p)) return 'Story';
+  if (/blog|article|post on my blog/.test(p)) return 'Blog';
+  return 'LinkedIn';
 }
 
 /** New post: say what to write (logs, themes) and how (a style), then Echo drafts it. */
 export default function PostChat() {
   const params = useLocalSearchParams<{ styleId?: string; logId?: string; logIds?: string }>();
-  const { logs, themes, styles, addDraft } = useStore();
+  const { logs, themes, styles, upsertDraft } = useStore();
   const insets = useSafeAreaInsets();
   const [prompt, setPrompt] = useState('');
   const [styleId, setStyleId] = useState<string | undefined>(params.styleId);
@@ -39,39 +40,34 @@ export default function PostChat() {
   const [picker, setPicker] = useState<'theme' | 'log' | null>(null);
   const [sheet, setSheet] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
 
-  const saved = logs.filter((l) => l.saved);
   const style = styles.find((st) => st.id === styleId);
   const options =
     picker === 'theme'
       ? themes.filter((t) => !themeIds.includes(t.id)).map((t) => ({ id: t.id, label: t.name }))
       : picker === 'log'
-        ? saved.filter((l) => !logIds.includes(l.id)).slice(0, PICK_LIMIT).map((l) => ({ id: l.id, label: l.title }))
+        ? logs.filter((l) => !logIds.includes(l.id)).slice(0, PICK_LIMIT).map((l) => ({ id: l.id, label: l.title }))
         : [];
 
   const write = async (text: string) => {
     const ask = text.trim();
     if (!ask || busy) return;
     setBusy(true);
+    setError('');
     try {
-      const chosen = style ?? closestStyle(ask, styles);
-      const picked = saved.filter((l) => logIds.includes(l.id) || l.themeIds.some((t) => themeIds.includes(t)));
-      const source = picked.length ? picked : saved.slice(0, 3);
-      const { title, text: body } = await draftFrom(source, chosen);
-      const id = newId('dr');
-      addDraft({
-        id,
-        createdAt: new Date().toISOString(),
-        category: chosen?.category ?? 'LinkedIn',
-        title,
-        text: body,
-        logIds: source.map((l) => l.id),
-        status: 'draft',
-        version: 1,
-        styleId: chosen?.id,
-        texts: chosen ? { [chosen.id]: body } : undefined,
+      const category = inferCategory(ask);
+      const draft = await api.createDraft({
+        prompt: ask,
+        styleId: style?.id,
+        logIds,
+        themeIds,
+        category,
       });
-      router.replace(`/write-mode/draft/${id}`);
+      upsertDraft(draft);
+      router.replace(`/write-mode/draft/${draft.id}`);
+    } catch (e) {
+      setError(errorText(e));
     } finally {
       setBusy(false);
     }
@@ -91,6 +87,7 @@ export default function PostChat() {
             <Text style={[type.bodyStrong, s.grow]}>{idea}</Text>
           </Pressable>
         ))}
+        {!!error && <Text style={[type.meta, { color: colors.recording }]}>{error}</Text>}
       </ScrollView>
 
       {picker && (

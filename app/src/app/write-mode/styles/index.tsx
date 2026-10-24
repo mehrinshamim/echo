@@ -1,6 +1,9 @@
+import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as api from '@/api';
+import { errorText } from '@/client';
 import { useStore } from '@/store';
 import { border, borderDashed, colors, layout, radius, size, space, type } from '@/theme';
 import { BackPill } from '@/ui/BackPill';
@@ -9,11 +12,32 @@ import { Chip } from '@/ui/Chip';
 
 /** Every style Echo learned from your writing, plus a suggestion to merge two that read alike. */
 export default function Styles() {
-  const { styles, pieces, mergeSuggestion: m, mergeStyles, undoMerge, keepStylesSeparate } = useStore();
+  const { styles, pieces, mergeSuggestion: m, setStyles, setMergeSuggestion } = useStore();
   const insets = useSafeAreaInsets();
-  const total = styles.reduce((n, st) => n + st.pieceIds.length, 0);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const total = styles.reduce((n, st) => n + st.pieceCount, 0);
   const first = m && (styles.find((st) => st.id === m.keepId) ?? null);
-  const second = m && (styles.find((st) => st.id === m.mergeId) ?? m.removed ?? null);
+  const second = m && (styles.find((st) => st.id === m.mergeId) ?? null);
+
+  const doMerge = async () => {
+    if (!m || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      const merged = await api.mergeStyles(m.keepId, m.mergeId);
+      setStyles(styles.filter((s) => s.id !== m.mergeId).map((s) => (s.id === m.keepId ? merged : s)));
+      setMergeSuggestion(null);
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const keepSeparate = () => {
+    setMergeSuggestion(null);
+  };
 
   return (
     <View style={s.root}>
@@ -24,10 +48,11 @@ export default function Styles() {
       <ScrollView contentContainerStyle={[s.content, { paddingBottom: insets.bottom + space.xxl }]}>
         <Text style={type.h1}>Your writing styles</Text>
         <Text style={[type.bodyStrong, s.sub]}>
-          {pieces.length
+          {pieces.length || styles.length
             ? `Echo grouped ${total} pieces into ${styles.length} styles. Tap one to see what it learned.`
             : 'Upload your writing and Echo will group it into styles.'}
         </Text>
+        {!!error && <Text style={[type.meta, { color: colors.recording }]}>{error}</Text>}
 
         {m?.status === 'open' && first && second && (
           <View style={s.merge}>
@@ -39,19 +64,9 @@ export default function Styles() {
             </View>
             <Text style={[type.bodyStrong, s.reason]}>{m.reason}</Text>
             <View style={s.buttons}>
-              <Button label="Merge" size="sm" onPress={mergeStyles} style={s.btn} />
-              <Button label="Keep separate" variant="secondary" size="sm" onPress={keepStylesSeparate} style={s.btn} />
+              <Button label={busy ? 'Merging…' : 'Merge'} size="sm" disabled={busy} onPress={doMerge} style={s.btn} />
+              <Button label="Keep separate" variant="secondary" size="sm" onPress={keepSeparate} style={s.btn} />
             </View>
-          </View>
-        )}
-        {m?.status === 'merged' && first && (
-          <View style={s.merged}>
-            <Text style={[type.tab, s.mergedText]}>
-              Merged into {first.name} · {first.pieceIds.length} pieces
-            </Text>
-            <Pressable accessibilityRole="button" onPress={undoMerge} style={s.undo}>
-              <Text style={[type.tab, s.undoText]}>Undo</Text>
-            </Pressable>
           </View>
         )}
 
@@ -66,7 +81,7 @@ export default function Styles() {
             <View style={s.cardBody}>
               <View style={s.cardHead}>
                 <Text style={s.name}>{st.name}</Text>
-                <Text style={type.meta}>{st.pieceIds.length} pieces</Text>
+                <Text style={type.meta}>{st.pieceCount} pieces</Text>
               </View>
               <Text style={[type.bodyStrong, s.traits]}>{st.traits.join(' · ')}</Text>
             </View>

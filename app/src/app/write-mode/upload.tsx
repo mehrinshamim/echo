@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
+import * as DocumentPicker from 'expo-document-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { importLink } from '@/api';
-import { newId, useStore } from '@/store';
+import * as api from '@/api';
+import { errorText } from '@/client';
+import { useStore } from '@/store';
 import { border, borderDashed, colors, layout, radius, size, space, type } from '@/theme';
 import { Button } from '@/ui/Button';
 import { Header } from '@/ui/Header';
@@ -17,39 +19,76 @@ const SOURCES: { key: Source; label: string; icon: string }[] = [
 const TITLE_CHARS = 40;
 const TILE = 76;
 
-const wordCount = (text: string) => text.trim().split(/\s+/).filter(Boolean).length;
-
 /** Add past writing (posts, articles, threads) for Echo to learn your styles from. */
 export default function Upload() {
-  const { pieces, addPieces, removePiece } = useStore();
+  const { pieces, setPieces } = useStore();
   const insets = useSafeAreaInsets();
   const [source, setSource] = useState<Source>('paste');
   const [text, setText] = useState('');
   const [url, setUrl] = useState('');
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
   const pending = pieces.filter((p) => !p.analyzed);
 
-  const addPaste = () => {
+  const addPaste = async () => {
     const t = text.trim();
-    if (!t) return;
-    const words = wordCount(t);
-    const title = t.length > TITLE_CHARS ? `${t.slice(0, TITLE_CHARS)}…` : t;
-    addPieces([{ id: newId('pc'), title, source: `Pasted · ${words} words`, words, analyzed: false }]);
-    setText('');
+    if (!t || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      const title = t.length > TITLE_CHARS ? `${t.slice(0, TITLE_CHARS)}…` : t;
+      const created = await api.addPieces([{ text: t, title, label: 'Pasted' }]);
+      setPieces((prev) => [...prev, ...created]);
+      setText('');
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
   };
 
-  // Files and links are stand-ins until the backend can read them.
-  const addFile = () =>
-    addPieces([{ id: newId('pc'), title: 'talk-notes.md', source: 'File · 640 words', words: 640, analyzed: false }]);
+  const addFile = async () => {
+    if (busy) return;
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['text/plain', 'text/markdown'],
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled || !result.assets.length) return;
+      setBusy(true);
+      setError('');
+      const asset = result.assets[0];
+      const content = await fetch(asset.uri).then((res) => res.text());
+      const created = await api.addPieces([{ text: content, title: asset.name, label: asset.name }]);
+      setPieces((prev) => [...prev, ...created]);
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const addLink = async () => {
     if (!url.trim() || busy) return;
     setBusy(true);
+    setError('');
     try {
-      addPieces(await importLink(url.trim()));
+      const created = await api.addPieces([{ text: url.trim(), title: url.trim(), label: 'Link' }]);
+      setPieces((prev) => [...prev, ...created]);
       setUrl('');
+    } catch (e) {
+      setError(errorText(e));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const removePiece = async (id: string) => {
+    try {
+      await api.deletePiece(id);
+      setPieces((prev) => prev.filter((p) => p.id !== id));
+    } catch (e) {
+      setError(errorText(e));
     }
   };
 
@@ -61,6 +100,7 @@ export default function Upload() {
           Add posts, articles or threads you've already written. Echo learns how you write, groups them by style, and
           uses them when you make a post.
         </Text>
+        {!!error && <Text style={[type.meta, { color: colors.recording }]}>{error}</Text>}
         <View style={s.tiles}>
           {SOURCES.map((o) => {
             const on = o.key === source;

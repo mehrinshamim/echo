@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { draftFrom, reviseDraft } from '@/api';
+import * as api from '@/api';
+import { errorText } from '@/client';
 import { shortDate } from '@/format';
 import { useStore } from '@/store';
 import { border, colors, layout, radius, size, space, type } from '@/theme';
@@ -25,40 +26,57 @@ const PLATFORMS: { key: PostPlatform; label: string }[] = [
 ];
 const CHAR_LIMIT = { LinkedIn: 3000, Blog: 3000, Story: 280 } as const;
 const TEXT_MIN_HEIGHT = 250;
-const PICK_LIMIT = 8;
 const SQUARE = 10;
+const AUTOSAVE_DEBOUNCE_MS = 2000;
 
 export default function DraftScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { drafts, logs, styles, updateDraft, publishDraft } = useStore();
+  const { drafts, logs, styles, upsertDraft } = useStore();
   const insets = useSafeAreaInsets();
   const draft = drafts.find((d) => d.id === id);
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
   const [ask, setAsk] = useState('');
   const [styleSheet, setStyleSheet] = useState(false);
   const [finish, setFinish] = useState(false);
   const [platform, setPlatform] = useState<PostPlatform>('LinkedIn');
   const [url, setUrl] = useState('');
-  const [addingLog, setAddingLog] = useState(false);
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!id || draft) return;
+    api
+      .getDraft(id)
+      .then(upsertDraft)
+      .catch((e) => setError(errorText(e)));
+  }, [id, draft, upsertDraft]);
 
   if (!draft) {
     return (
       <View style={s.root}>
         <Header mode="write" back="Write" />
-        <Text style={[type.body, s.pad]}>This draft no longer exists.</Text>
+        <Text style={[type.body, s.pad]}>{error || 'This draft no longer exists.'}</Text>
       </View>
     );
   }
 
   const published = draft.status === 'published';
-  const sources = logs.filter((l) => draft.logIds.includes(l.id));
+  const sources = draft.sourceLogs ?? logs.filter((l) => draft.logIds.includes(l.id));
   const style = styles.find((st) => st.id === draft.styleId);
   const limit = CHAR_LIMIT[draft.category];
   const status = published ? 'Published' : draft.status === 'saved' ? 'Saved' : 'Edited';
 
-  const edit = (text: string) =>
-    updateDraft(draft.id, { text, texts: draft.styleId ? { ...draft.texts, [draft.styleId]: text } : draft.texts });
+  const edit = (text: string) => {
+    upsertDraft({ ...draft, text });
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = setTimeout(() => {
+      api
+        .editDraft(draft.id, text)
+        .then(upsertDraft)
+        .catch((e) => console.warn('Autosave failed', e));
+    }, AUTOSAVE_DEBOUNCE_MS);
+  };
 
   const copy = async () => {
     await Clipboard.setStringAsync(draft.text);
@@ -69,49 +87,65 @@ export default function DraftScreen() {
   const revise = async (instruction: string) => {
     if (!instruction.trim() || busy) return;
     setBusy(true);
+    setError('');
     try {
-      const text = await reviseDraft(draft.text, instruction);
-      updateDraft(draft.id, { text, version: draft.version + 1, texts: draft.styleId ? { ...draft.texts, [draft.styleId]: text } : draft.texts });
+      const updated = await api.reviseDraft(draft.id, instruction);
+      upsertDraft(updated);
       setAsk('');
+    } catch (e) {
+      setError(errorText(e));
     } finally {
       setBusy(false);
     }
   };
 
-  // Switching style keeps what you wrote in the style you leave and reuses earlier text for the one you pick.
   const pickStyle = async (next: Style | undefined) => {
     if (!next || next.id === draft.styleId || busy || published) return;
-    const texts = { ...draft.texts, ...(draft.styleId ? { [draft.styleId]: draft.text } : {}) };
-    if (texts[next.id] !== undefined) {
-      updateDraft(draft.id, { styleId: next.id, category: next.category, text: texts[next.id], texts });
-      return;
-    }
     setBusy(true);
+    setError('');
     try {
-      const { text } = await draftFrom(sources, next);
-      updateDraft(draft.id, { styleId: next.id, category: next.category, text, texts: { ...texts, [next.id]: text } });
+      const updated = await api.restyleDraft(draft.id, next.id);
+      upsertDraft(updated);
+    } catch (e) {
+      setError(errorText(e));
     } finally {
       setBusy(false);
     }
   };
 
-  const saveForLater = () => {
-    updateDraft(draft.id, { status: 'saved', savedAt: new Date().toISOString() });
-    router.dismissTo({ pathname: '/write-mode', params: { tab: 'saved', n: String(Date.now()) } });
+  const saveForLater = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const updated = await api.saveDraft(draft.id);
+      upsertDraft(updated);
+      router.dismissTo({ pathname: '/write-mode', params: { tab: 'saved', n: String(Date.now()) } });
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const markPublished = () => {
-    publishDraft(draft.id, platform, url.trim() || undefined);
-    setFinish(false);
-    router.dismissTo({ pathname: '/write-mode', params: { tab: 'pub', n: String(Date.now()) } });
+  const markPublished = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const updated = await api.publishDraft(draft.id, platform, url.trim() || undefined);
+      upsertDraft(updated);
+      setFinish(false);
+      router.dismissTo({ pathname: '/write-mode', params: { tab: 'pub', n: String(Date.now()) } });
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const openFinish = () => {
     setPlatform(draft.category === 'Blog' ? 'Blog' : 'LinkedIn');
     setFinish(true);
   };
-
-  const addable = logs.filter((l) => l.saved && !draft.logIds.includes(l.id)).slice(0, PICK_LIMIT);
 
   return (
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -130,6 +164,8 @@ export default function DraftScreen() {
           ))}
           {!published && <Chip section="styles" label="Style" large dashed onPress={() => setStyleSheet(true)} />}
         </ScrollView>
+
+        {!!error && <Text style={[type.meta, { color: colors.recording }]}>{error}</Text>}
 
         <Card style={s.textCard}>
           <TextInput
@@ -167,29 +203,7 @@ export default function DraftScreen() {
             <Text style={type.meta}>{shortDate(l.createdAt)}</Text>
           </Pressable>
         ))}
-        {!published && <Chip section="logs" label="Log" large dashed onPress={() => setAddingLog(!addingLog)} />}
-        {addingLog && (
-          <Card style={s.gap}>
-            {addable.length ? (
-              addable.map((l) => (
-                <Pressable
-                  key={l.id}
-                  style={s.pickRow}
-                  onPress={() => {
-                    updateDraft(draft.id, { logIds: [...draft.logIds, l.id] });
-                    setAddingLog(false);
-                  }}
-                >
-                  <Text style={type.bodyStrong} numberOfLines={1}>
-                    {l.title}
-                  </Text>
-                </Pressable>
-              ))
-            ) : (
-              <Text style={type.meta}>Nothing left to add.</Text>
-            )}
-          </Card>
-        )}
+
         {published && (
           <Text style={type.meta}>
             Published{draft.platform ? ` on ${draft.platform}` : ''}
@@ -220,7 +234,7 @@ export default function DraftScreen() {
         visible={styleSheet}
         styles={styles}
         selectedId={draft.styleId}
-        onSelect={(sid) => pickStyle(styles.find((st) => st.id === sid) ?? closest(styles, draft.category))}
+        onSelect={(sid) => pickStyle(styles.find((st) => st.id === sid))}
         onClose={() => setStyleSheet(false)}
       />
 
@@ -245,9 +259,6 @@ export default function DraftScreen() {
   );
 }
 
-/** "Let Echo choose" from the sheet: stay in the draft's current category if a style matches it. */
-const closest = (styles: Style[], category: string) => styles.find((st) => st.category === category) ?? styles[0];
-
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   pad: { paddingHorizontal: layout.gutter, paddingTop: space.l },
@@ -257,7 +268,6 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: space.s, paddingHorizontal: layout.gutter },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.s },
   grow: { flex: 1 },
-  gap: { gap: space.xs },
   textCard: { padding: space.xs },
   text: { padding: space.m, minHeight: TEXT_MIN_HEIGHT, textAlignVertical: 'top' },
   counter: {
@@ -283,7 +293,6 @@ const s = StyleSheet.create({
   },
   square: { width: SQUARE, height: SQUARE, borderRadius: SQUARE / 3, backgroundColor: colors.logs.fill, borderWidth: border.width, borderColor: border.color },
   sourceTitle: { flex: 1, fontSize: 15 },
-  pickRow: { minHeight: size.tap, justifyContent: 'center' },
   footer: {
     paddingHorizontal: layout.gutter,
     paddingTop: space.m,

@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { analyzeWriting } from '@/api';
+import * as api from '@/api';
 import { useStore } from '@/store';
 import { border, colors, layout, radius, space, type } from '@/theme';
 import { Button } from '@/ui/Button';
@@ -14,7 +14,7 @@ const MARK = 28;
 
 /** Echo reads the new pieces and files them under styles; moves on to Styles when done. */
 export default function Analyze() {
-  const { pieces, styles, applyAnalysis } = useStore();
+  const { pieces, setStyles, setMergeSuggestion, refresh } = useStore();
   const insets = useSafeAreaInsets();
   const [stage, setStage] = useState(0);
   const [failed, setFailed] = useState(false);
@@ -26,17 +26,18 @@ export default function Analyze() {
     'Sorted into your styles',
     alike === null ? 'Looking for styles that read alike' : alike ? 'Found 2 styles that read alike' : 'No styles read alike',
   ];
-  // Read once: applying the result marks every piece analyzed, which would change `count` mid-run.
-  const input = useRef({ pieces, styles });
 
   useEffect(() => {
     const timers = steps.map((_, i) => setTimeout(() => setStage(i + 1), STEP_MS * (i + 1)));
     let live = true;
-    analyzeWriting(input.current.pieces, input.current.styles)
+    api
+      .analyzeWriting()
       .then((r) => {
         if (!live) return;
-        applyAnalysis(r.styles, r.suggestion);
-        setAlike(!!r.suggestion);
+        setStyles(r.styles);
+        setMergeSuggestion(r.mergeSuggestion);
+        setAlike(!!r.mergeSuggestion);
+        refresh().catch(() => {});
         timers.push(setTimeout(() => router.replace('/write-mode/styles'), STEP_MS * (steps.length + 1)));
       })
       .catch(() => live && setFailed(true));

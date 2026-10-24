@@ -1,9 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as api from '@/api';
+import { errorText } from '@/client';
 import { useStore } from '@/store';
 import { border, colors, layout, radius, size, space, type } from '@/theme';
+import type { StyleDetail as StyleDetailType } from '@/types';
 import { BackPill } from '@/ui/BackPill';
 import { Button } from '@/ui/Button';
 
@@ -12,11 +15,25 @@ const BAR = 3;
 /** What Echo learned about one style, and the pieces it came from. */
 export default function StyleDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { styles, pieces, renameStyle } = useStore();
+  const { styles, setStyles } = useStore();
   const insets = useSafeAreaInsets();
   const style = styles.find((st) => st.id === id);
+  const [detail, setDetail] = useState<StyleDetailType | null>(null);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(style?.name ?? '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!id) return;
+    api
+      .styleDetail(id)
+      .then((d) => {
+        setDetail(d);
+        setName(d.name);
+      })
+      .catch((e) => setError(errorText(e)));
+  }, [id]);
 
   const bar = (
     <View style={[s.bar, { paddingTop: insets.top + space.s }]}>
@@ -42,10 +59,21 @@ export default function StyleDetail() {
     );
   }
 
-  const mine = pieces.filter((p) => style.pieceIds.includes(p.id));
-  const save = () => {
-    if (name.trim()) renameStyle(style.id, name.trim());
-    setEditing(false);
+  const mine = detail?.pieces ?? [];
+  const save = async () => {
+    if (!name.trim() || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      const updated = await api.renameStyle(style.id, name.trim());
+      setDetail(updated);
+      setStyles(styles.map((s) => (s.id === style.id ? updated : s)));
+      setEditing(false);
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -68,9 +96,10 @@ export default function StyleDetail() {
             />
           </View>
           <Text style={[type.tab, s.heroMeta]}>
-            {style.pieceIds.length} pieces · {style.where}
+            {detail?.pieces.length ?? style.pieceCount} pieces · {style.where}
           </Text>
         </View>
+        {!!error && <Text style={[type.meta, { color: colors.recording }]}>{error}</Text>}
 
         <View style={s.block}>
           <Text style={[type.h2, s.h3]}>How you write here</Text>

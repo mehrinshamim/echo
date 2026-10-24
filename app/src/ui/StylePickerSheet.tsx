@@ -19,7 +19,7 @@ const DOT_ON = 10;
 /** "Write it like…": pick a style, let Echo choose, or upload new writing. */
 export function StylePickerSheet({ visible, styles, selectedId, onSelect, onClose }: Props) {
   const options = [
-    ...styles.map((st) => ({ id: st.id as string | undefined, name: st.name, meta: `${st.pieceIds.length} pieces · ${st.where}` })),
+    ...styles.map((st) => ({ id: st.id as string | undefined, name: st.name, meta: `${st.pieceCount} pieces · ${st.where}` })),
     { id: undefined, name: 'Let Echo choose', meta: 'Picks the closest style to what you ask' },
   ];
   return (

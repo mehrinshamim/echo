@@ -3,6 +3,7 @@ import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-na
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as api from '@/api';
 import { shortDate } from '@/format';
 import { useStore } from '@/store';
 import { border, colors, layout, radius, size, space, type } from '@/theme';
@@ -25,7 +26,7 @@ const SQUARE = 10;
 
 /** Write mode home: start a post, add writing, and find drafts, saved and published posts. */
 export default function WriteHome() {
-  const { drafts, styles, publishDraft } = useStore();
+  const { drafts, styles, upsertDraft } = useStore();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ tab?: Tab; n?: string }>();
   const [tab, setTab] = useState<Tab>(params.tab ?? 'drafts');
@@ -38,6 +39,17 @@ export default function WriteHome() {
   const open = (id: string) => router.push(`/write-mode/draft/${id}`);
 
   const published = byStatus('published').sort((a, b) => (b.publishedAt ?? '').localeCompare(a.publishedAt ?? ''));
+
+  const quickPublish = async (d: Draft) => {
+    try {
+      const updated = await api.publishDraft(d.id, d.category === 'Blog' ? 'Blog' : 'LinkedIn');
+      upsertDraft(updated);
+      setTab('pub');
+    } catch {
+      // Silently ignore — the draft remains in "saved" for the user to try again via the editor.
+    }
+  };
+
 
   return (
     <View style={s.root}>
@@ -68,7 +80,7 @@ export default function WriteHome() {
                 key={st.id}
                 compact
                 name={st.name}
-                meta={`${st.pieceIds.length} pieces`}
+                meta={`${st.pieceCount} pieces`}
                 onPress={() => router.push(`/write-mode/styles/${st.id}`)}
               />
             ))}
@@ -128,10 +140,7 @@ export default function WriteHome() {
                     label="Mark published"
                     variant="secondary"
                     size="sm"
-                    onPress={() => {
-                      publishDraft(d.id, d.category === 'Blog' ? 'Blog' : 'LinkedIn');
-                      setTab('pub');
-                    }}
+                    onPress={() => quickPublish(d)}
                     style={s.grow}
                   />
                 </View>
