@@ -45,7 +45,13 @@ class Settings(BaseSettings):
     chunk_words: int = 250  # ~250 words per chunk for /ask
     chunk_overlap_words: int = 40
     max_themes_per_entry: int = 3
+    theme_match_threshold: float = 0.85  # reuse an existing theme this similar in meaning
     entries_page_size: int = 50
+
+    # Home
+    home_theme_count: int = 6
+    nudge_min_logs: int = 3  # "Echo noticed": a theme with this many logs...
+    nudge_window_days: int = 7  # ...in this many days
 
     # Recurring-thought echoes: similar older entries shown after saving
     echo_count: int = 3
