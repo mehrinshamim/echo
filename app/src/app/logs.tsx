@@ -6,7 +6,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { dayLabel, durationLabel, timeOfDay } from '@/format';
 import { useStore } from '@/store';
 import { border, colors, layout, radius, size, space, type } from '@/theme';
-import type { Log } from '@/types';
+import type { LogItem } from '@/types';
 import { BackPill } from '@/ui/BackPill';
 import { Timeline } from '@/ui/Timeline';
 
@@ -14,22 +14,22 @@ const SWATCH = 14;
 const SEARCH_HEIGHT = 52;
 
 export default function Logs() {
-  const { logs, themes } = useStore();
+  const { logs } = useStore();
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const m = new Map<string, Log[]>();
+    const m = new Map<string, LogItem[]>();
     logs
-      .filter((l) => l.saved && (!q || `${l.title} ${l.transcript}`.toLowerCase().includes(q)))
+      .filter((l) => !q || l.title.toLowerCase().includes(q))
       .forEach((l) => {
         const k = dayLabel(l.createdAt);
         m.set(k, [...(m.get(k) ?? []), l]);
       });
     return [...m.entries()];
   }, [logs, query]);
-  const meta = (l: Log) =>
-    [timeOfDay(l.createdAt), durationLabel(l.seconds), themes.find((t) => t.id === l.themeIds[0])?.name]
+  const meta = (l: LogItem) =>
+    [timeOfDay(l.createdAt), durationLabel(l.seconds), l.primaryTheme?.name]
       .filter(Boolean)
       .join(' · ');
 

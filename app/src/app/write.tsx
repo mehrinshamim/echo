@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { analyzeLog } from '@/api';
+import * as api from '@/api';
+import { errorText } from '@/client';
 import { clock } from '@/format';
-import { newId, useStore } from '@/store';
+import { useStore } from '@/store';
 import { colors, layout, space, type } from '@/theme';
 import { BackPill } from '@/ui/BackPill';
 import { Button } from '@/ui/Button';
@@ -13,7 +14,7 @@ const BAR = 3;
 
 /** WriteLog: a plain note editor. Capture adds a transcript block below what you typed. */
 export default function WriteLog() {
-  const { writeDraft, setWriteDraft, writeCaptures, resetWrite, logs, themes, addLog } = useStore();
+  const { writeDraft, setWriteDraft, writeCaptures, resetWrite, addLog } = useStore();
   const insets = useSafeAreaInsets();
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
@@ -26,22 +27,17 @@ export default function WriteLog() {
     setBusy(true);
     setError('');
     try {
-      const analysis = await analyzeLog(text, themes, logs);
-      const id = newId('lg');
-      addLog({
-        id,
-        createdAt: new Date().toISOString(),
-        transcript: text,
-        source: writeCaptures.length ? 'mixed' : 'typed',
-        saved: false,
+      const saved = await api.saveLog({
+        text,
+        title: title.trim() || undefined,
         seconds: writeCaptures.reduce((n, c) => n + c.seconds, 0) || undefined,
-        ...analysis,
-        title: title.trim() || analysis.title,
+        source: writeCaptures.length ? 'mixed' : 'typed',
       });
+      addLog(saved);
       resetWrite();
-      router.replace(`/log/${id}`);
-    } catch {
-      setError('Could not save that. Your text is still here, try again.');
+      router.replace(`/log/${saved.id}`);
+    } catch (e) {
+      setError(errorText(e));
     } finally {
       setBusy(false);
     }

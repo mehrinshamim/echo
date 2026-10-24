@@ -2,19 +2,19 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { shortDate } from '@/format';
-import { newId, useStore } from '@/store';
+import { localId, useStore } from '@/store';
 import { colors, layout, space, type } from '@/theme';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
 import { Header } from '@/ui/Header';
 
 export default function Chats() {
-  const { chats, addChat } = useStore();
+  const { chats, upsertChat } = useStore();
   const insets = useSafeAreaInsets();
 
   const newChat = () => {
-    const id = newId('ch');
-    addChat({ id, createdAt: new Date().toISOString(), title: 'New chat', themeIds: [], logIds: [], messages: [] });
+    const id = localId();
+    upsertChat({ id, title: 'New chat', themeIds: [], logIds: [], updatedAt: new Date().toISOString(), messages: [], local: true });
     router.push(`/chats/${id}`);
   };
 
@@ -28,7 +28,7 @@ export default function Chats() {
           <Card key={c.id} fill={colors.chats.fill} onPress={() => router.push(`/chats/${c.id}`)}>
             <Text style={type.bodyStrong}>{c.title}</Text>
             <Text style={type.meta}>
-              {shortDate(c.createdAt)} · {c.messages.length} {c.messages.length === 1 ? 'message' : 'messages'}
+              {shortDate(c.updatedAt)} · {c.messages.length} {c.messages.length === 1 ? 'message' : 'messages'}
             </Text>
           </Card>
         ))}

@@ -8,14 +8,12 @@ import { Header } from '@/ui/Header';
 import { ThemeCard } from '@/ui/ThemeCard';
 
 export default function Themes() {
-  const { themes, logs } = useStore();
+  const { themes } = useStore();
   const insets = useSafeAreaInsets();
   const rows = themes
-    .map((t) => {
-      const own = logs.filter((l) => l.saved && l.themeIds.includes(t.id));
-      return { t, count: own.length, last: own[0]?.createdAt };
-    })
+    .map((t) => ({ t, count: t.logCount, last: t.lastLogAt }))
     .sort((a, b) => (b.last ?? '').localeCompare(a.last ?? ''));
+
 
   return (
     <View style={s.root}>

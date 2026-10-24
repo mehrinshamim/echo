@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -14,7 +14,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
 import Feather from '@expo/vector-icons/Feather';
-import { ask } from '@/api';
+import * as api from '@/api';
+import { errorText } from '@/client';
 import { shortDate } from '@/format';
 import { useStore } from '@/store';
 import { border, colors, layout, radius, size, space, type } from '@/theme';
@@ -54,17 +55,25 @@ function AnswerText({ text, citations, onOpen }: { text: string; citations?: Cit
   );
 }
 
-/** A chat answers only from your logs. + Theme / + Log narrow the context it reads; + Style sets a voice. */
+/** A chat answers only from your logs. + Theme / + Log narrow the context it reads. */
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { chats, logs, themes, styles, updateChat } = useStore();
+  const { chats, logs, themes, styles, upsertChat, replaceChat } = useStore();
   const insets = useSafeAreaInsets();
   const chat = chats.find((c) => c.id === id);
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState(false);
+  const [sendErr, setSendErr] = useState('');
   const [picker, setPicker] = useState<'theme' | 'log' | null>(null);
   const [styleSheet, setStyleSheet] = useState(false);
   const scroll = useRef<ScrollViewInstance>(null);
+
+  // Load full chat history from server if it has no messages but isn't local.
+  useEffect(() => {
+    if (!chat || chat.local || chat.messages.length > 0) return;
+    api.getChat(id).then((full) => upsertChat(full)).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   if (!chat) {
     return (
@@ -77,27 +86,42 @@ export default function ChatScreen() {
     );
   }
 
-  const saved = logs.filter((l) => l.saved);
-  const scoped = () => {
-    if (!chat.themeIds.length && !chat.logIds.length) return saved;
-    return saved.filter((l) => chat.logIds.includes(l.id) || l.themeIds.some((t) => chat.themeIds.includes(t)));
-  };
-
   const send = async (text: string) => {
     const question = text.trim();
     if (!question || busy) return;
     setQ('');
+    setSendErr('');
     setBusy(true);
+    const userMsg: Message = { role: 'user', text: question };
+    // Optimistically show the user bubble.
+    upsertChat({ ...chat, messages: [...chat.messages, userMsg] });
     try {
-      const withQ = [...chat.messages, { role: 'user' as const, text: question }];
-      updateChat(chat.id, { messages: withQ, title: chat.messages.length ? chat.title : question });
-      const { answer, citations } = await ask(question, scoped());
-      updateChat(chat.id, { messages: [...withQ, { role: 'assistant', text: answer, citations }] });
+      if (chat.local) {
+        // First question: create the chat on the server.
+        const answer = await api.createChat(question, chat.themeIds, chat.logIds);
+        const serverChat = {
+          id: answer.chatId,
+          title: question.slice(0, 60),
+          themeIds: chat.themeIds,
+          logIds: chat.logIds,
+          updatedAt: new Date().toISOString(),
+          local: false as const,
+          messages: [userMsg, { role: 'assistant' as const, text: answer.text, citations: answer.citations }],
+        };
+        replaceChat(chat.id, serverChat);
+      } else {
+        const answer = await api.askFollowUp(chat.id, question);
+        upsertChat({
+          ...chat,
+          messages: [...chat.messages, userMsg, { role: 'assistant', text: answer.text, citations: answer.citations }],
+          updatedAt: new Date().toISOString(),
+        });
+      }
       setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 50);
-    } catch {
-      updateChat(chat.id, {
-        messages: [...chat.messages, { role: 'user' as const, text: question }, { role: 'assistant', text: "Couldn't search your logs just now. Try asking again." }],
-      });
+    } catch (e) {
+      setSendErr(errorText(e));
+      // Roll back the optimistic user bubble.
+      upsertChat({ ...chat });
     } finally {
       setBusy(false);
     }
@@ -107,7 +131,7 @@ export default function ChatScreen() {
     picker === 'theme'
       ? themes.filter((t) => !chat.themeIds.includes(t.id)).map((t) => ({ id: t.id, label: t.name }))
       : picker === 'log'
-        ? saved.filter((l) => !chat.logIds.includes(l.id)).slice(0, PICK_LIMIT).map((l) => ({ id: l.id, label: l.title }))
+        ? logs.filter((l) => !chat.logIds.includes(l.id)).slice(0, PICK_LIMIT).map((l) => ({ id: l.id, label: l.title }))
         : [];
 
   const contextChips = (
@@ -117,7 +141,7 @@ export default function ChatScreen() {
           key={tid}
           section="themes"
           label={themes.find((t) => t.id === tid)?.name ?? 'Theme'}
-          onRemove={() => updateChat(chat.id, { themeIds: chat.themeIds.filter((x) => x !== tid) })}
+          onRemove={() => upsertChat({ ...chat, themeIds: chat.themeIds.filter((x) => x !== tid) })}
         />
       ))}
       {chat.logIds.map((lid) => (
@@ -125,14 +149,14 @@ export default function ChatScreen() {
           key={lid}
           section="logs"
           label={logs.find((l) => l.id === lid)?.title ?? 'Log'}
-          onRemove={() => updateChat(chat.id, { logIds: chat.logIds.filter((x) => x !== lid) })}
+          onRemove={() => upsertChat({ ...chat, logIds: chat.logIds.filter((x) => x !== lid) })}
         />
       ))}
       {chat.styleId && (
         <Chip
           section="styles"
           label={styles.find((st) => st.id === chat.styleId)?.name ?? 'Style'}
-          onRemove={() => updateChat(chat.id, { styleId: undefined })}
+          onRemove={() => upsertChat({ ...chat, styleId: undefined })}
         />
       )}
       <Chip section="chats" label="Theme" add onPress={() => setPicker(picker === 'theme' ? null : 'theme')} />
@@ -149,9 +173,10 @@ export default function ChatScreen() {
             key={o.id}
             style={s.pickRow}
             onPress={() => {
-              updateChat(
-                chat.id,
-                picker === 'theme' ? { themeIds: [...chat.themeIds, o.id] } : { logIds: [...chat.logIds, o.id] },
+              upsertChat(
+                picker === 'theme'
+                  ? { ...chat, themeIds: [...chat.themeIds, o.id] }
+                  : { ...chat, logIds: [...chat.logIds, o.id] },
               );
               setPicker(null);
             }}
@@ -172,12 +197,12 @@ export default function ChatScreen() {
       visible={styleSheet}
       styles={styles}
       selectedId={chat.styleId}
-      onSelect={(styleId) => updateChat(chat.id, { styleId })}
+      onSelect={(styleId) => upsertChat({ ...chat, styleId })}
       onClose={() => setStyleSheet(false)}
     />
   );
 
-  // New chat: intro, suggestions and a composer card, as in the design.
+  // New chat: intro, suggestions and a composer card.
   if (!chat.messages.length) {
     return (
       <KeyboardAvoidingView
@@ -210,6 +235,7 @@ export default function ChatScreen() {
           ))}
         </View>
         {pickerCard && <View style={s.padded}>{pickerCard}</View>}
+        {!!sendErr && <Text style={[type.meta, s.padded, { color: colors.recording }]}>{sendErr}</Text>}
         <View style={[s.composer, s.padded2]}>
           <TextInput
             style={[type.bodyLg, s.composerInput]}
@@ -232,7 +258,7 @@ export default function ChatScreen() {
   }
 
   // Conversation: user bubbles, unboxed answers with inline citations, sources and actions.
-  const theme = themes.find((t) => t.id === chat.themeIds[0]);
+  const firstTheme = themes.find((t) => t.id === chat.themeIds[0]);
   return (
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView
@@ -242,14 +268,15 @@ export default function ChatScreen() {
       >
         <View style={s.topRow}>
           <BackPill label="Chats" />
-          {theme && (
+          {firstTheme && (
             <View style={s.tag}>
-              <Text style={[type.label, s.tagText]}>{theme.name}</Text>
+              <Text style={[type.label, s.tagText]}>{firstTheme.name}</Text>
             </View>
           )}
         </View>
         <View style={s.contextRow}>{contextChips}</View>
         {pickerCard}
+        {!!sendErr && <Text style={[type.meta, { color: colors.recording }]}>{sendErr}</Text>}
         {chat.messages.map((m: Message, i) =>
           m.role === 'user' ? (
             <View key={i} style={s.user}>

@@ -1,8 +1,10 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Feather from '@expo/vector-icons/Feather';
+import { errorText } from '@/client';
 import { useStore } from '@/store';
+import { signInWithGoogle } from '@/supabase';
 import { border, colors, radius, size, space, type } from '@/theme';
 import { BackPill } from '@/ui/BackPill';
 
@@ -11,8 +13,10 @@ const BADGE = 26;
 const TRUST = ['Only you can see your logs', 'Delete everything anytime'];
 
 export default function SignIn() {
-  const { signIn, reopenOnboarding } = useStore();
+  const { reopenOnboarding } = useStore();
   const insets = useSafeAreaInsets();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
   return (
     <View style={[s.root, { paddingTop: insets.top + space.m, paddingBottom: insets.bottom + SIDE }]}>
       <BackPill onPress={reopenOnboarding} />
@@ -27,19 +31,32 @@ export default function SignIn() {
           </View>
         ))}
       </View>
-      {/* Stub: becomes Supabase Google OAuth once the backend exists. */}
+      {!!err && <Text style={[type.meta, { color: colors.recording }]}>{err}</Text>}
       <Pressable
         accessibilityRole="button"
-        onPress={() => {
-          signIn();
-          router.replace('/');
+        disabled={busy}
+        onPress={async () => {
+          setBusy(true);
+          setErr('');
+          try {
+            await signInWithGoogle();
+            // Navigation is automatic: store.tsx auth listener sets user, _layout.tsx re-routes.
+          } catch (e) {
+            setErr(errorText(e));
+          } finally {
+            setBusy(false);
+          }
         }}
-        style={({ pressed: p }) => [s.google, { opacity: p ? 0.7 : 1 }]}
+        style={({ pressed: p }) => [s.google, { opacity: p || busy ? 0.7 : 1 }]}
       >
-        <View style={s.badge}>
-          <Text style={type.tab}>G</Text>
-        </View>
-        <Text style={[type.button, s.googleText]}>Continue with Google</Text>
+        {busy ? (
+          <ActivityIndicator color={colors.ink} />
+        ) : (
+          <View style={s.badge}>
+            <Text style={type.tab}>G</Text>
+          </View>
+        )}
+        <Text style={[type.button, s.googleText]}>{busy ? 'Opening browser…' : 'Continue with Google'}</Text>
       </Pressable>
       <Text style={[type.meta, s.terms]}>By continuing you agree to the Terms and Privacy Policy.</Text>
     </View>

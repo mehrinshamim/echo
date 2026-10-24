@@ -3,7 +3,6 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Feather from '@expo/vector-icons/Feather';
-import { isThisWeek, noticed, weekSummary } from '@/api';
 import { ago, fullDate } from '@/format';
 import { useStore } from '@/store';
 import { border, colors, layout, radius, size, space, type } from '@/theme';
@@ -18,31 +17,26 @@ const THEME_LIMIT = 6;
 const GRID_GAP = 10;
 
 export default function Home() {
-  const { user, logs, themes, chats, dismissedNoticeFor, dismissNotice, resetWrite } = useStore();
+  const { user, home, logs, themes, chats, dismissedNoticeFor, dismissNotice, resetWrite } = useStore();
   const insets = useSafeAreaInsets();
-  const saved = useMemo(() => logs.filter((l) => l.saved), [logs]);
-  const week = useMemo(() => weekSummary(saved, themes), [saved, themes]);
-  const notice = useMemo(() => noticed(saved, themes), [saved, themes]);
-  const showNotice = notice && notice.theme.id !== dismissedNoticeFor;
+  const nudge = home?.nudge ?? null;
+  const showNotice = nudge && nudge.themeId !== dismissedNoticeFor;
 
+  // Theme cards: use server logCount/lastLogAt from the Theme type (populated by GET /home).
   const themeCards = useMemo(
     () =>
       themes
-        .map((t) => {
-          const own = saved.filter((l) => l.themeIds.includes(t.id));
-          return { theme: t, count: own.length, last: own.map((l) => l.createdAt).sort().pop() };
-        })
+        .map((t) => ({ theme: t, count: t.logCount, last: t.lastLogAt }))
         .sort((a, b) => (b.last ?? '').localeCompare(a.last ?? ''))
         .slice(0, THEME_LIMIT),
-    [themes, saved],
+    [themes],
   );
 
+  // "This week, in your words": most recent 2 logs from the cached list.
   const weekLines = useMemo(() => {
-    const recent = saved.filter((l) => isThisWeek(l.createdAt)).slice(0, 2);
-    return recent.length
-      ? recent.map((l) => ({ id: l.id, title: l.keyPoints[0] ?? l.title }))
-      : [{ id: 'none', title: week.line }];
-  }, [saved, week.line]);
+    const recent = logs.slice(0, 2);
+    return recent.length ? recent.map((l) => ({ id: l.id, title: l.title })) : [{ id: 'none', title: 'Start by capturing a thought.' }];
+  }, [logs]);
 
   return (
     <View style={s.root}>
@@ -68,17 +62,17 @@ export default function Home() {
         {showNotice && (
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.push(`/themes/${notice.theme.id}`)}
+            onPress={() => router.push(`/themes/${nudge!.themeId}`)}
             style={s.notice}
           >
             <View style={s.noticeHead}>
-              <Text style={type.label}>Echo noticed · {notice.theme.name}</Text>
-              <Pressable accessibilityLabel="Dismiss" onPress={() => dismissNotice(notice.theme.id)} style={s.dismiss}>
+              <Text style={type.label}>Echo noticed · {nudge!.themeName}</Text>
+              <Pressable accessibilityLabel="Dismiss" onPress={() => dismissNotice(nudge!.themeId)} style={s.dismiss}>
                 <Feather name="x" size={size.icon} color={colors.ink} />
               </Pressable>
             </View>
             <View style={s.noticeBody}>
-              <Text style={type.bodyStrong}>You've come back to this {notice.count} times this week.</Text>
+              <Text style={type.bodyStrong}>You've come back to this {nudge!.count} times this week.</Text>
               <Text style={[type.tab, s.link]}>See how it changed</Text>
             </View>
           </Pressable>
@@ -86,9 +80,9 @@ export default function Home() {
 
         <NavList
           rows={[
-            { section: 'logs', title: 'Logs', icon: 'list', count: saved.length, onPress: () => router.push('/logs') },
-            { section: 'themes', title: 'Themes', icon: 'folder', count: themes.length, onPress: () => router.push('/themes') },
-            { section: 'chats', title: 'Chats', icon: 'message-square', count: chats.length, onPress: () => router.push('/chats') },
+            { section: 'logs', title: 'Logs', icon: 'list', count: home?.counts.logs ?? logs.length, onPress: () => router.push('/logs') },
+            { section: 'themes', title: 'Themes', icon: 'folder', count: home?.counts.themes ?? themes.length, onPress: () => router.push('/themes') },
+            { section: 'chats', title: 'Chats', icon: 'message-square', count: home?.counts.chats ?? chats.length, onPress: () => router.push('/chats') },
           ]}
         />
 

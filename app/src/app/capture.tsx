@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { analyzeLog } from '@/api';
+import * as api from '@/api';
+import { errorText } from '@/client';
 import { clock } from '@/format';
 import { ensureMicPermission, pauseRecording, resumeRecording, startRecording, stopRecording } from '@/recorder';
-import { newId, useStore } from '@/store';
+import { useStore } from '@/store';
 import { border, colors, radius, space, type } from '@/theme';
 import { ensureModel, isModelReady, transcribe } from '@/transcribe';
 import { BackPill } from '@/ui/BackPill';
@@ -27,7 +28,7 @@ export default function Capture() {
   // mode=append: called from WriteLog; the transcript goes below the typed text instead of a new Result.
   const { mode } = useLocalSearchParams<{ mode?: string }>();
   const append = mode === 'append';
-  const { logs, themes, addLog, addWriteCapture } = useStore();
+  const { addLog, addWriteCapture } = useStore();
   const insets = useSafeAreaInsets();
   const [phase, setPhase] = useState<Phase>(isModelReady() ? 'recording' : 'preparing');
   const [sec, setSec] = useState(0);
@@ -100,13 +101,12 @@ export default function Capture() {
         return;
       }
       setStep(1);
-      const analysis = await analyzeLog(text, themes, logs);
+      const saved = await api.saveLog({ text, seconds, source: 'voice' });
       setStep(STEPS.length);
-      const id = newId('lg');
-      addLog({ id, createdAt: new Date().toISOString(), transcript: text, source: 'voice', saved: false, seconds, ...analysis });
-      router.replace(`/log/${id}`);
+      addLog(saved);
+      router.replace(`/log/${saved.id}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
       setPhase('error');
     }
   };
