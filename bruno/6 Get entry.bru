@@ -1,0 +1,19 @@
+meta {
+  name: 6 Get entry
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/entries/{{entryId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+docs {
+  Opens the last entry made with "4 Create entry".
+}
