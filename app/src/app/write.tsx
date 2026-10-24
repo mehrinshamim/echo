@@ -17,13 +17,14 @@ export default function WriteLog() {
   const insets = useSafeAreaInsets();
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
   const date = new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
   const captured = writeCaptures.map((c) => c.text);
   const text = [writeDraft.trim(), ...captured].filter(Boolean).join('\n\n');
 
   const save = async () => {
-    if (!text) return router.back();
     setBusy(true);
+    setError('');
     try {
       const analysis = await analyzeLog(text, themes, logs);
       const id = newId('lg');
@@ -39,6 +40,8 @@ export default function WriteLog() {
       });
       resetWrite();
       router.replace(`/log/${id}`);
+    } catch {
+      setError('Could not save that. Your text is still here, try again.');
     } finally {
       setBusy(false);
     }
@@ -52,6 +55,7 @@ export default function WriteLog() {
       </View>
       <ScrollView contentContainerStyle={s.body} keyboardShouldPersistTaps="handled">
         <Text style={type.meta}>New log · {date}</Text>
+        {!!error && <Text style={[type.bodyStrong, { color: colors.recording }]}>{error}</Text>}
         <TextInput
           style={s.title}
           value={title}

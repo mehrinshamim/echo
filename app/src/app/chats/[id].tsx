@@ -46,7 +46,9 @@ function AnswerText({ text, citations, onOpen }: { text: string; citations?: Cit
         const c = citations?.find((x) => x.n === Number(part));
         return c ? (
           <Text key={i}> <CitationPill n={c.n} onPress={() => onOpen(c.logId)} /></Text>
-        ) : null;
+        ) : (
+          `[${part}]`
+        );
       })}
     </Text>
   );
@@ -92,6 +94,10 @@ export default function ChatScreen() {
       const { answer, citations } = await ask(question, scoped());
       updateChat(chat.id, { messages: [...withQ, { role: 'assistant', text: answer, citations }] });
       setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 50);
+    } catch {
+      updateChat(chat.id, {
+        messages: [...chat.messages, { role: 'user' as const, text: question }, { role: 'assistant', text: "Couldn't search your logs just now. Try asking again." }],
+      });
     } finally {
       setBusy(false);
     }
