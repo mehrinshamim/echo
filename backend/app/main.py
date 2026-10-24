@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.deps import User, get_user
+from app.routes import entries
 
 app = FastAPI(title="Echo API")
 app.add_middleware(
@@ -11,6 +12,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(entries.router)
 
 
 @app.get("/health")
