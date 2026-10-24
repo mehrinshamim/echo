@@ -27,7 +27,6 @@ const CHAR_LIMIT = { LinkedIn: 3000, Blog: 3000, Story: 280 } as const;
 const TEXT_MIN_HEIGHT = 250;
 const PICK_LIMIT = 8;
 const SQUARE = 10;
-const REVISION_SLOP = { top: 2, bottom: 2 };
 
 export default function DraftScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -116,7 +115,7 @@ export default function DraftScreen() {
 
   return (
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Header mode="write" back="Write" right={<Text style={s.mode}>{status}</Text>} />
+      <Header mode="write" back="Write" label={`${status} · v${draft.version}`} />
       <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.row} style={s.bleed}>
           {styles.map((st) => (
@@ -124,20 +123,14 @@ export default function DraftScreen() {
               key={st.id}
               section="styles"
               label={st.name}
+              large
               plain={st.id !== draft.styleId}
               onPress={published ? undefined : () => pickStyle(st)}
             />
           ))}
-          {!published && <Chip section="styles" label="Style" dashed onPress={() => setStyleSheet(true)} />}
+          {!published && <Chip section="styles" label="Style" large dashed onPress={() => setStyleSheet(true)} />}
         </ScrollView>
 
-        <TextInput
-          style={type.h1}
-          value={draft.title}
-          onChangeText={(title) => updateDraft(draft.id, { title })}
-          editable={!published}
-          multiline
-        />
         <Card style={s.textCard}>
           <TextInput
             style={[type.body, s.text]}
@@ -152,33 +145,29 @@ export default function DraftScreen() {
             <Text style={type.meta}>
               {draft.text.length.toLocaleString()} / {limit.toLocaleString()} characters
             </Text>
-            <Button label={copied ? 'Copied' : 'Copy'} variant="secondary" icon={copied ? 'check' : 'copy'} onPress={copy} style={s.small} />
+            <Button label={copied ? 'Copied' : 'Copy'} variant="secondary" size="xs" onPress={copy} style={s.small} />
           </View>
         </Card>
 
         {!published && (
           <View style={s.wrap}>
             {REVISIONS.map((r) => (
-              <Pressable key={r} accessibilityRole="button" hitSlop={REVISION_SLOP} onPress={() => revise(r)} style={s.revision}>
-                <Text style={type.label}>{r}</Text>
-              </Pressable>
+              <Chip key={r} large plain section="styles" label={r} onPress={() => revise(r)} />
             ))}
           </View>
         )}
 
-        <Text style={type.meta}>
-          Built from{style ? ` · written like ${style.name}` : ''} · v{draft.version} · {shortDate(draft.createdAt)}
-        </Text>
+        <Text style={[type.label, s.secondary]}>Built from</Text>
         {sources.map((l) => (
           <Pressable key={l.id} accessibilityRole="button" onPress={() => router.push(`/log/${l.id}`)} style={s.source}>
             <View style={s.square} />
-            <Text style={[type.bodyStrong, s.grow]} numberOfLines={1}>
+            <Text style={[type.bodyStrong, s.sourceTitle]} numberOfLines={1}>
               {l.title}
             </Text>
             <Text style={type.meta}>{shortDate(l.createdAt)}</Text>
           </Pressable>
         ))}
-        {!published && <Chip section="logs" label="Log" dashed onPress={() => setAddingLog(!addingLog)} />}
+        {!published && <Chip section="logs" label="Log" large dashed onPress={() => setAddingLog(!addingLog)} />}
         {addingLog && (
           <Card style={s.gap}>
             {addable.length ? (
@@ -221,8 +210,8 @@ export default function DraftScreen() {
             placeholderTextColor={colors.placeholder}
           />
           <View style={s.row}>
-            <Button label="Save for later" variant="secondary" onPress={saveForLater} style={s.grow} />
-            <Button label="Finish" onPress={openFinish} style={s.grow} />
+            <Button label="Save for later" variant="secondary" size="footer" onPress={saveForLater} style={s.grow} />
+            <Button label="Finish" size="footer" onPress={openFinish} style={s.grow} />
           </View>
         </View>
       )}
@@ -236,8 +225,8 @@ export default function DraftScreen() {
       />
 
       <BottomSheet visible={finish} title="Finish this post" onClose={() => setFinish(false)}>
-        <Button label={copied ? 'Copied text' : 'Copy text'} variant="secondary" icon="copy" onPress={copy} />
-        <Text style={type.meta}>Where did you post it?</Text>
+        <Button label={copied ? 'Copied text' : 'Copy text'} variant="secondary" size="footer" onPress={copy} />
+        <Text style={[type.label, s.secondary]}>Where did you post it?</Text>
         <Segmented options={PLATFORMS} value={platform} onChange={setPlatform} />
         <TextInput
           style={[type.body, s.url]}
@@ -250,7 +239,7 @@ export default function DraftScreen() {
           keyboardType="url"
         />
         <Text style={type.meta}>Published posts are added to your styles, so the next one sounds even more like you.</Text>
-        <Button label="Mark as published" onPress={markPublished} />
+        <Button label="Mark as published" size="footer" onPress={markPublished} />
       </BottomSheet>
     </KeyboardAvoidingView>
   );
@@ -262,7 +251,7 @@ const closest = (styles: Style[], category: string) => styles.find((st) => st.ca
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   pad: { paddingHorizontal: layout.gutter, paddingTop: space.l },
-  mode: { ...type.label, color: colors.onInk },
+  secondary: { color: colors.textSecondary },
   content: { paddingHorizontal: layout.gutter, paddingTop: space.l, paddingBottom: space.xxl, gap: layout.cardGap },
   bleed: { marginHorizontal: -layout.gutter, flexGrow: 0 },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.s, paddingHorizontal: layout.gutter },
@@ -280,28 +269,20 @@ const s = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.divider,
   },
-  small: { height: size.tap, paddingHorizontal: space.m },
-  revision: {
-    height: size.chip + 2,
-    paddingHorizontal: space.m,
-    justifyContent: 'center',
-    borderRadius: radius.pill,
-    borderWidth: border.width,
-    borderColor: border.color,
-    backgroundColor: colors.card,
-  },
+  small: { paddingHorizontal: space.m },
   source: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.m,
     minHeight: size.tap,
     paddingHorizontal: space.m,
-    borderRadius: radius.tile,
+    borderRadius: radius.small,
     borderWidth: border.width,
     borderColor: border.color,
     backgroundColor: colors.card,
   },
   square: { width: SQUARE, height: SQUARE, borderRadius: SQUARE / 3, backgroundColor: colors.logs.fill, borderWidth: border.width, borderColor: border.color },
+  sourceTitle: { flex: 1, fontSize: 15 },
   pickRow: { minHeight: size.tap, justifyContent: 'center' },
   footer: {
     paddingHorizontal: layout.gutter,

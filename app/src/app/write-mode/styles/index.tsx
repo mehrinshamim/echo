@@ -1,13 +1,11 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '@/store';
-import { borderDashed, colors, layout, radius, size, space, type } from '@/theme';
+import { border, borderDashed, colors, layout, radius, size, space, type } from '@/theme';
+import { BackPill } from '@/ui/BackPill';
 import { Button } from '@/ui/Button';
-import { Card } from '@/ui/Card';
 import { Chip } from '@/ui/Chip';
-import { Header } from '@/ui/Header';
-import { StyleCard } from '@/ui/StyleCard';
 
 /** Every style Echo learned from your writing, plus a suggestion to merge two that read alike. */
 export default function Styles() {
@@ -19,14 +17,13 @@ export default function Styles() {
 
   return (
     <View style={s.root}>
-      <Header
-        mode="write"
-        back="Write"
-        right={<Button label="+ Upload more" variant="secondary" onPress={() => router.push('/write-mode/upload')} style={s.upload} />}
-      />
+      <View style={[s.bar, { paddingTop: insets.top + space.s }]}>
+        <BackPill label="Write" onInk />
+        <Button label="+ Upload more" variant="onInk" size="sm" onPress={() => router.push('/write-mode/upload')} style={s.upload} />
+      </View>
       <ScrollView contentContainerStyle={[s.content, { paddingBottom: insets.bottom + space.xxl }]}>
         <Text style={type.h1}>Your writing styles</Text>
-        <Text style={type.meta}>
+        <Text style={[type.bodyStrong, s.sub]}>
           {pieces.length
             ? `Echo grouped ${total} pieces into ${styles.length} styles. Tap one to see what it learned.`
             : 'Upload your writing and Echo will group it into styles.'}
@@ -34,36 +31,46 @@ export default function Styles() {
 
         {m?.status === 'open' && first && second && (
           <View style={s.merge}>
-            <Text style={type.meta}>These two read alike</Text>
+            <Text style={[type.label, s.sub]}>These two read alike</Text>
             <View style={s.pair}>
               <Chip section="styles" label={first.name} />
-              <Text style={type.bodyStrong}>+</Text>
+              <Text style={type.button}>+</Text>
               <Chip section="styles" label={second.name} />
             </View>
-            <Text style={type.bodyStrong}>{m.reason}</Text>
-            <View style={s.pair}>
-              <Button label="Merge" onPress={mergeStyles} style={s.btn} />
-              <Button label="Keep separate" variant="secondary" onPress={keepStylesSeparate} style={s.btn} />
+            <Text style={[type.bodyStrong, s.reason]}>{m.reason}</Text>
+            <View style={s.buttons}>
+              <Button label="Merge" size="sm" onPress={mergeStyles} style={s.btn} />
+              <Button label="Keep separate" variant="secondary" size="sm" onPress={keepStylesSeparate} style={s.btn} />
             </View>
           </View>
         )}
         {m?.status === 'merged' && first && (
-          <Card fill={colors.styles.tint} style={s.merged}>
-            <Text style={[type.bodyStrong, s.grow]}>
+          <View style={s.merged}>
+            <Text style={[type.tab, s.mergedText]}>
               Merged into {first.name} · {first.pieceIds.length} pieces
             </Text>
-            <Button label="Undo" variant="secondary" onPress={undoMerge} style={s.btn} />
-          </Card>
+            <Pressable accessibilityRole="button" onPress={undoMerge} style={s.undo}>
+              <Text style={[type.tab, s.undoText]}>Undo</Text>
+            </Pressable>
+          </View>
         )}
 
         {styles.map((st) => (
-          <StyleCard
+          <Pressable
             key={st.id}
-            name={st.name}
-            meta={`${st.pieceIds.length} pieces`}
-            detail={st.traits.join(' · ')}
+            accessibilityRole="button"
             onPress={() => router.push(`/write-mode/styles/${st.id}`)}
-          />
+            style={({ pressed }) => [s.card, { opacity: pressed ? 0.7 : 1 }]}
+          >
+            <View style={s.strip} />
+            <View style={s.cardBody}>
+              <View style={s.cardHead}>
+                <Text style={s.name}>{st.name}</Text>
+                <Text style={type.meta}>{st.pieceIds.length} pieces</Text>
+              </View>
+              <Text style={[type.bodyStrong, s.traits]}>{st.traits.join(' · ')}</Text>
+            </View>
+          </Pressable>
         ))}
       </ScrollView>
     </View>
@@ -72,11 +79,45 @@ export default function Styles() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  upload: { height: size.tap, paddingHorizontal: space.m },
-  content: { paddingHorizontal: layout.gutter, paddingTop: space.l, gap: layout.cardGap },
-  merge: { ...borderDashed, borderRadius: radius.card, backgroundColor: colors.card, padding: layout.cardPadding, gap: space.m },
-  pair: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.s },
-  btn: { height: size.tap, paddingHorizontal: space.l },
-  merged: { flexDirection: 'row', alignItems: 'center', gap: space.m },
-  grow: { flex: 1 },
+  bar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: layout.gutter,
+    paddingBottom: space.m,
+    backgroundColor: colors.ink,
+  },
+  upload: { height: size.tap },
+  content: { paddingHorizontal: layout.gutter, paddingTop: space.l, gap: 14 },
+  sub: { color: colors.textSecondary },
+  merge: { ...borderDashed, borderRadius: radius.card, backgroundColor: colors.card, padding: 14, gap: space.s + 2 },
+  pair: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
+  reason: { lineHeight: 22 },
+  buttons: { flexDirection: 'row', gap: space.s },
+  btn: { height: size.tap },
+  merged: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.m,
+    backgroundColor: colors.ink,
+    borderRadius: radius.tile,
+    paddingVertical: 6,
+    paddingLeft: space.l,
+    paddingRight: 6,
+  },
+  mergedText: { flex: 1, color: colors.onInk, fontFamily: 'Archivo_600SemiBold' },
+  undo: { height: size.tap, paddingHorizontal: space.m + 2, justifyContent: 'center' },
+  undoText: { color: colors.onInk, textDecorationLine: 'underline' },
+  card: {
+    backgroundColor: colors.card,
+    borderWidth: border.width,
+    borderColor: border.color,
+    borderRadius: radius.tile,
+    overflow: 'hidden',
+  },
+  strip: { height: size.themeStrip, backgroundColor: colors.styles.line },
+  cardBody: { paddingTop: space.m, paddingHorizontal: 14, paddingBottom: 14, gap: space.s },
+  cardHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: space.s + 2 },
+  name: { fontFamily: 'Archivo_800ExtraBold', fontSize: 17, color: colors.ink, flexShrink: 1 },
+  traits: { color: colors.textSecondary, fontSize: 15, lineHeight: 21 },
 });

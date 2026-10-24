@@ -1,9 +1,8 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { border, colors, radius, size, space, type } from '../theme';
+import { border, borderDashed, colors, radius, size, type } from '../theme';
 import type { Style } from '../types';
 import { BottomSheet } from './BottomSheet';
-import { Button } from './Button';
 
 type Props = {
   visible: boolean;
@@ -26,7 +25,7 @@ export function StylePickerSheet({ visible, styles, selectedId, onSelect, onClos
   return (
     <BottomSheet visible={visible} title="Write it like…" onClose={onClose}>
       <View style={s.list}>
-        {options.map((o) => {
+        {options.map((o, i) => {
           const on = o.id === selectedId;
           return (
             <Pressable
@@ -37,7 +36,7 @@ export function StylePickerSheet({ visible, styles, selectedId, onSelect, onClos
                 onSelect(o.id);
                 onClose();
               }}
-              style={[s.row, on && s.rowOn]}
+              style={[s.row, on && s.rowOn, i < options.length - 1 && s.divider]}
             >
               <View style={s.dot}>{on && <View style={s.dotOn} />}</View>
               <View style={s.text}>
@@ -48,29 +47,37 @@ export function StylePickerSheet({ visible, styles, selectedId, onSelect, onClos
           );
         })}
       </View>
-      <Button
-        label="+ Upload new writing"
-        variant="secondary"
+      <Pressable
+        accessibilityRole="button"
         onPress={() => {
           onClose();
           router.push('/write-mode/upload');
         }}
-      />
+        style={s.upload}
+      >
+        <Text style={type.tab}>+ Upload new writing</Text>
+      </Pressable>
     </BottomSheet>
   );
 }
 
 const s = StyleSheet.create({
-  list: { gap: space.s },
+  list: {
+    backgroundColor: colors.card,
+    borderWidth: border.width,
+    borderColor: border.color,
+    borderRadius: radius.card,
+    overflow: 'hidden',
+  },
+  upload: { ...borderDashed, height: size.btnSecondary, borderRadius: size.btnSecondary / 2, alignItems: 'center', justifyContent: 'center' },
+  divider: { borderBottomWidth: 1, borderBottomColor: colors.divider },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space.m,
-    minHeight: size.tap + space.l,
-    padding: space.m,
-    borderRadius: radius.tile,
-    borderWidth: border.width,
-    borderColor: border.color,
+    gap: 12,
+    minHeight: 58,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
     backgroundColor: colors.card,
   },
   rowOn: { backgroundColor: colors.styles.tint },

@@ -4,7 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { draftFrom } from '@/api';
 import { newId, useStore } from '@/store';
-import { border, colors, layout, radius, size, space, type } from '@/theme';
+import { border, colors, layout, size, space, type } from '@/theme';
 import type { Style } from '@/types';
 import { Card } from '@/ui/Card';
 import { Chip } from '@/ui/Chip';
@@ -82,11 +82,12 @@ export default function PostChat() {
       <Header mode="write" back="Write" right={<Text style={s.mode}>New post</Text>} />
       <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
         <Text style={type.h1}>What do you want to post?</Text>
-        <Text style={type.body}>Add logs or themes for what to say, and a style for how to say it.</Text>
-        <Text style={[type.meta, s.top]}>From this week</Text>
+        <Text style={[type.body, s.secondary]}>Add logs or themes for what to say, and a style for how to say it.</Text>
+        <View style={s.grow} />
+        <Text style={[type.label, s.secondary]}>From this week</Text>
         {IDEAS.map((idea) => (
           <Pressable key={idea} accessibilityRole="button" onPress={() => setPrompt(idea)} style={s.idea}>
-            <Text style={type.button}>↳</Text>
+            <Text style={s.arrow}>↳</Text>
             <Text style={[type.bodyStrong, s.grow]}>{idea}</Text>
           </Pressable>
         ))}
@@ -143,9 +144,9 @@ export default function PostChat() {
               onRemove={() => setLogIds(logIds.filter((x) => x !== lid))}
             />
           ))}
-          <Chip section="styles" label="Style" dashed onPress={() => setSheet(true)} />
-          <Chip section="logs" label="Log" dashed onPress={() => setPicker(picker === 'log' ? null : 'log')} />
-          <Chip section="themes" label="Theme" dashed onPress={() => setPicker(picker === 'theme' ? null : 'theme')} />
+          <Chip section="styles" label="Style" add onPress={() => setSheet(true)} />
+          <Chip section="logs" label="Log" add onPress={() => setPicker(picker === 'log' ? null : 'log')} />
+          <Chip section="themes" label="Theme" add onPress={() => setPicker(picker === 'theme' ? null : 'theme')} />
           <View style={s.grow} />
           <SendButton label="Write it" onPress={() => write(prompt)} disabled={busy || !prompt.trim()} />
         </View>
@@ -159,8 +160,9 @@ export default function PostChat() {
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   mode: { ...type.label, color: colors.onInk },
-  content: { paddingHorizontal: layout.gutter, paddingTop: space.l, gap: layout.cardGap },
-  top: { marginTop: space.s },
+  content: { flexGrow: 1, paddingHorizontal: layout.gutter, paddingTop: space.l, gap: space.s + 2 },
+  secondary: { color: colors.textSecondary },
+  arrow: { fontFamily: 'Archivo_700Bold', fontSize: 18, color: colors.styles.line },
   grow: { flex: 1 },
   idea: {
     flexDirection: 'row',
@@ -175,10 +177,13 @@ const s = StyleSheet.create({
   composer: {
     marginHorizontal: layout.gutter,
     backgroundColor: colors.card,
-    borderRadius: radius.card,
+    borderRadius: 22,
     borderWidth: border.width,
     borderColor: border.color,
-    padding: space.m,
+    paddingTop: space.m + 2,
+    paddingLeft: space.m + 2,
+    paddingRight: space.s + 2,
+    paddingBottom: space.s + 2,
     gap: space.m,
   },
   input: { padding: 0, minHeight: size.tap },

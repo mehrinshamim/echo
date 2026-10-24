@@ -3,12 +3,11 @@ import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '@/store';
-import { colors, layout, radius, size, space, type } from '@/theme';
+import { border, colors, layout, radius, size, space, type } from '@/theme';
+import { BackPill } from '@/ui/BackPill';
 import { Button } from '@/ui/Button';
-import { Card } from '@/ui/Card';
-import { Header } from '@/ui/Header';
 
-const BULLET = 8;
+const BAR = 3;
 
 /** What Echo learned about one style, and the pieces it came from. */
 export default function StyleDetail() {
@@ -19,10 +18,25 @@ export default function StyleDetail() {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(style?.name ?? '');
 
+  const bar = (
+    <View style={[s.bar, { paddingTop: insets.top + space.s }]}>
+      <BackPill label="Styles" onInk />
+      {style && (
+        <Button
+          label="Write in this style"
+          variant="onInk"
+          size="sm"
+          onPress={() => router.push({ pathname: '/write-mode/chat', params: { styleId: style.id } })}
+          style={s.write}
+        />
+      )}
+    </View>
+  );
+
   if (!style) {
     return (
       <View style={s.root}>
-        <Header mode="write" back="Styles" />
+        {bar}
         <Text style={[type.body, s.pad]}>This style no longer exists.</Text>
       </View>
     );
@@ -36,58 +50,52 @@ export default function StyleDetail() {
 
   return (
     <View style={s.root}>
-      <Header
-        mode="write"
-        back="Styles"
-        right={
-          <Button
-            label="Write in this style"
-            variant="secondary"
-            onPress={() => router.push({ pathname: '/write-mode/chat', params: { styleId: style.id } })}
-            style={s.write}
-          />
-        }
-      />
-      <ScrollView contentContainerStyle={[s.content, { paddingBottom: insets.bottom + space.xxl }]}>
-        <View style={s.head}>
-          {editing ? (
-            <TextInput style={[type.h1, s.grow]} value={name} onChangeText={setName} onSubmitEditing={save} autoFocus />
-          ) : (
-            <Text style={[type.h1, s.grow]}>{style.name}</Text>
-          )}
-          <Button
-            label={editing ? 'Save' : 'Rename'}
-            variant="secondary"
-            onPress={editing ? save : () => setEditing(true)}
-            style={s.small}
-          />
+      {bar}
+      <ScrollView contentContainerStyle={[s.content, { paddingBottom: insets.bottom + space.xxl }]} keyboardShouldPersistTaps="handled">
+        <View style={s.hero}>
+          <View style={s.head}>
+            {editing ? (
+              <TextInput style={[s.title, s.grow]} value={name} onChangeText={setName} onSubmitEditing={save} autoFocus />
+            ) : (
+              <Text style={[s.title, s.grow]}>{style.name}</Text>
+            )}
+            <Button
+              label={editing ? 'Save' : 'Rename'}
+              variant="secondary"
+              size="xs"
+              onPress={editing ? save : () => setEditing(true)}
+              style={s.small}
+            />
+          </View>
+          <Text style={[type.tab, s.heroMeta]}>
+            {style.pieceIds.length} pieces · {style.where}
+          </Text>
         </View>
-        <Text style={type.meta}>
-          {style.pieceIds.length} pieces · {style.where}
-        </Text>
 
-        <Card style={s.gap}>
-          <Text style={type.meta}>How you write here</Text>
+        <View style={s.block}>
+          <Text style={[type.h2, s.h3]}>How you write here</Text>
           {style.traits.map((t) => (
             <View key={t} style={s.trait}>
               <View style={s.bullet} />
               <Text style={[type.bodyStrong, s.grow]}>{t}</Text>
             </View>
           ))}
-        </Card>
+        </View>
 
-        <Card style={s.gap}>
-          <Text style={type.meta}>Sounds like</Text>
-          <Text style={type.bodyStrong}>“{style.sample}”</Text>
-        </Card>
+        <View style={s.sample}>
+          <Text style={[type.label, s.secondary]}>Sounds like</Text>
+          <Text style={[type.bodyStrong, s.quote]}>“{style.sample}”</Text>
+        </View>
 
-        <Text style={type.h2}>Pieces</Text>
-        {mine.map((p) => (
-          <Card key={p.id} style={s.gap}>
-            <Text style={type.bodyStrong}>{p.title}</Text>
-            <Text style={type.meta}>{p.source}</Text>
-          </Card>
-        ))}
+        <Text style={[type.h2, s.h3]}>Pieces</Text>
+        <View style={s.list}>
+          {mine.map((p, i) => (
+            <View key={p.id} style={[s.item, i < mine.length - 1 && s.divider]}>
+              <Text style={[type.bodyStrong, s.itemTitle]}>{p.title}</Text>
+              <Text style={type.meta}>{p.source}</Text>
+            </View>
+          ))}
+        </View>
       </ScrollView>
     </View>
   );
@@ -95,18 +103,52 @@ export default function StyleDetail() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  pad: { paddingHorizontal: layout.gutter, paddingTop: space.l },
-  content: { paddingHorizontal: layout.gutter, paddingTop: space.l, gap: layout.cardGap },
-  write: { height: size.tap, paddingHorizontal: space.m },
-  small: { height: size.tap, paddingHorizontal: space.m },
-  head: { flexDirection: 'row', alignItems: 'center', gap: space.s },
-  grow: { flex: 1 },
-  gap: { gap: space.s },
-  trait: { flexDirection: 'row', alignItems: 'center', gap: space.m },
-  bullet: {
-    width: BULLET,
-    height: BULLET,
-    borderRadius: radius.pill,
-    backgroundColor: colors.styles.line,
+  bar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: layout.gutter,
+    paddingBottom: space.m,
+    backgroundColor: colors.ink,
   },
+  write: { height: size.tap },
+  pad: { paddingHorizontal: layout.gutter, paddingTop: space.l },
+  content: { paddingHorizontal: layout.gutter, paddingTop: space.l, gap: space.l },
+  grow: { flex: 1 },
+  secondary: { color: colors.textSecondary },
+  hero: {
+    backgroundColor: colors.styles.fill,
+    borderWidth: border.width,
+    borderColor: border.color,
+    borderRadius: radius.card,
+    padding: space.l,
+    gap: 6,
+  },
+  head: { flexDirection: 'row', alignItems: 'flex-start', gap: space.s },
+  title: { ...type.h1, fontSize: 26, lineHeight: 27, padding: 0 },
+  heroMeta: { fontFamily: 'Archivo_600SemiBold' },
+  small: { paddingHorizontal: space.m },
+  block: { gap: space.s + 2 },
+  h3: { fontSize: 17 },
+  trait: { flexDirection: 'row', gap: space.m },
+  bullet: { width: BAR, borderRadius: 2, backgroundColor: colors.styles.line },
+  sample: {
+    backgroundColor: colors.card,
+    borderWidth: border.width,
+    borderColor: border.color,
+    borderRadius: radius.card,
+    padding: 14,
+    gap: 6,
+  },
+  quote: { lineHeight: 24 },
+  list: {
+    backgroundColor: colors.card,
+    borderWidth: border.width,
+    borderColor: border.color,
+    borderRadius: radius.card,
+    overflow: 'hidden',
+  },
+  item: { paddingVertical: space.s + 2, paddingHorizontal: 14, gap: 2 },
+  divider: { borderBottomWidth: 1, borderBottomColor: colors.divider },
+  itemTitle: { fontFamily: 'Archivo_700Bold', fontSize: 15, lineHeight: 20 },
 });

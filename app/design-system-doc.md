@@ -46,14 +46,16 @@ Archivo is the only family. In React Native, each weight is its own font family 
 
 | Token (`type.`) | Size | Weight → family | Line height | Letter spacing |
 |---|---|---|---|---|
-| `h1` | 32 (range 28–36) | 800 → `Archivo_800ExtraBold` | 1.1 × size | −0.02em (−0.64) |
+| `h1` | 28 | 800 → `Archivo_800ExtraBold` | 1.08 × size | −0.02em (−0.56) |
 | `h1Lg` | 36 (onboarding) | 800 | 1.05 × size | −0.02em |
 | `h2` | 19 | 800 | 24 | 0 |
+| `bodyLg` | 17 | 500 → `Archivo_500Medium` | 1.55–1.65 × size | 0 |
 | `body` | 16 (range 16–17) | 500 → `Archivo_500Medium` | 1.5 × size (range 1.45–1.6) | 0 |
 | `bodyStrong` | 16 | 600 → `Archivo_600SemiBold` | 24 | 0 |
 | `meta` | 14 (range 14–15) | 600, in `textSecondary` | 20 | 0 |
 | `button` | 16 (range 15–16) | 700 → `Archivo_700Bold` | 20 | 0 |
-| `label` (derived) | 13 | 700, uppercase-free | 16 | 0 |
+| `tab` | 15 | 700, back pill, tabs, small buttons | 20 | 0 |
+| `label` | 14 | 700, section labels and chips | 18 | 0 |
 
 ## 4. Shape
 
@@ -61,10 +63,11 @@ Archivo is the only family. In React Native, each weight is its own font family 
 |---|---|
 | `border.width` | 1.5, `ink` on every card and control |
 | `radius.card` | 20 |
-| `radius.tile` | 16 (range 14–16) |
+| `radius.tile` | 16 (list cards) |
+| `radius.small` | 14 (small cards, Segmented) |
 | `radius.pill` | height / 2 (use 999) |
 | `divider` | 1px `divider` color |
-| `shadow.float` | Capture bar only: offset y 6, blur 16, ink at 18% opacity, Android elevation 8 (derived values) |
+| `shadow.float` | Capture bar only: offset y 6, blur 18, `#281e0a` at 12% opacity (from the design), Android elevation 8 (derived) |
 | Theme card | a white card with a **6px `themes.fill` top strip** |
 | Timeline | a **2px line** plus **12px dots** in the section's `line` color (Published posts: ink) |
 | Style card | a white card with a **6px `styles.line` top strip**; 148 wide in the horizontal row |
@@ -74,17 +77,21 @@ Archivo is the only family. In React Native, each weight is its own font family 
 
 | Token (`space.`) | 4 · 8 · 12 · 16 · 20 · 24 · 32 → `xs s m l xl xxl xxxl` |
 |---|---|
-| Screen gutter | 20 |
+| Screen gutter | 18 |
 | Gap between cards | 12 |
 | Card padding | 16 |
 
 | Token (`size.`) | Value |
 |---|---|
 | `tap` | 44 (minimum) |
-| `btnPrimary` | 56 (range 52–58) |
-| `btnSecondary` | 48 (range 44–56) |
+| `btnLg` | 58 (Onboarding, Sign-in) |
+| `btnPrimary` | 56 (default primary) |
+| `btnMd` | 54 (result footer, Write home actions) |
+| `btnFooter` | 52 (draft, upload, capture bar) |
+| `btnSecondary` | 48 |
+| `btnSm` / `btnXs` | 40 / 36 (inline buttons; tap area extended to 44) |
 | `back` | 44 |
-| `chip` | 38 (range 36–40) |
+| `chip` / `chipLg` | 36 (composer, merge) / 40 (draft, result themes); tap area extended to 44 |
 | `citation` | 24 |
 | `dot` | 12 |
 | `focusRing` | 3 |
@@ -93,21 +100,23 @@ Archivo is the only family. In React Native, each weight is its own font family 
 
 | Component | File | Spec |
 |---|---|---|
-| Primary button | `Button.tsx` `variant="primary"` | `ink` fill pill, `onInk` text, 56 tall, `button` type |
-| Secondary button | `Button.tsx` `variant="secondary"` | `card` fill pill, 1.5px ink border, 48 tall |
-| Back | `BackPill.tsx` | 44 tall outlined pill with a ← icon and a label ("Back" or the parent screen's name) |
-| Segmented tabs | `Segmented.tsx` | Bordered pill bar; the selected segment is ink with `onInk` text, the others are transparent with ink text |
-| Chip | `Chip.tsx` | 38 tall pill with a 1.5px ink border and its type's `fill` (theme, log or chat); optional × to remove, or a "+" add variant |
+| Primary button | `Button.tsx` `variant="primary"` | `ink` fill pill, `onInk` text, 56 tall by default; `size` prop gives 58 / 54 / 52 / 40 / 36 |
+| Secondary button | `Button.tsx` `variant="secondary"` | `card` fill pill, 1.5px ink border, 48 tall by default |
+| Ink-bar buttons | `Button.tsx` `variant="onInk"` / `"white"` | Outline (white border, white text) and borderless white pill for the Write mode ink header |
+| Back | `BackPill.tsx` | 44 tall pill, padding `0 14 0 8`, 18px ← icon, 15/700 label ("Back" or the parent screen's name); white border on ink |
+| Segmented tabs | `Segmented.tsx` | Rectangular bar (radius 14), 44px tabs, 15/700; the selected tab is ink with `onInk` text, the others are white with ink text |
+| Chip | `Chip.tsx` | 36 (or 40 with `large`) tall pill, 14/700, 1.5px ink border and its type's `fill`; × to remove, `add` (white) or `dashed` for "+ Label" actions, `plain` for unselected choices |
 | Citation | `CitationPill.tsx` | 24 tall pill in `logs.fill` showing `[n]`; tapping opens the cited log |
 | Card | `Card.tsx` | `card` fill, 1.5px ink border, `radius.card`, 16 padding |
 | Theme card | `ThemeCard.tsx` | Card plus a 6px `themes.fill` top strip; theme name (h2), count and last activity (meta) |
-| Timeline | `Timeline.tsx` | Vertical 2px line and 12px dots in the section's `line` color; each row shows a date (meta), a title (bodyStrong) and a summary (body) |
-| Section tile | `SectionTile.tsx` | Tile (`radius.tile`) in a section's `fill` with a 1.5px ink border; title, count and icon |
-| Capture bar | `CaptureBar.tsx` | Floating docked bar: card fill, border, `shadow.float`. Holds a "Type a log…" field (tap → WriteLog) and an ink "Capture" pill with a mic icon |
+| Timeline | `Timeline.tsx` | Vertical 2px line and 12px dots in the section's `line` color (`color` overrides, Published uses ink). `cards` variant: each entry is a white card (radius 16) with date, title, meta; `dateRight` puts the date beside the title; `plain` variant has bare text on the line |
+| Nav list | `NavList.tsx` | Home's grouped list: one white card, 60px rows with a 34px colored icon chip, title, count and › |
+| Send button | `SendButton.tsx` | 44px ink circle with a white up arrow (chat send, "Write it") |
+| Capture bar | `CaptureBar.tsx` | Floating docked bar: card fill, border, `shadow.float`, radius 32, inset 12 from the sides and 10 from the bottom. Holds a "Type a log" field (tap → WriteLog) and a 52px ink "Capture" pill with a mic icon |
 | Style card | `StyleCard.tsx` | Card plus a 6px `styles.line` top strip; style name (bodyStrong) and piece count (meta) |
 | Bottom sheet | `BottomSheet.tsx` | Backdrop, grabber, title and × close; used by "Write it like…" and "Finish this post" |
 | Dashed chip | `Chip.tsx` `dashed` | Transparent fill, dashed border; "+ Style", "+ Log" |
-| Header | `Header.tsx` | Back pill on the left, title, and an optional right action. A `mode="write"` variant uses an ink bar |
+| Header | `Header.tsx` | Back pill on the left, optional `label` or `right` content, optional 28px title and extra children. A `mode="write"` variant uses an ink bar |
 
 **Icons (derived):** Feather from `@expo/vector-icons`, size 20 (22 in bars), always ink or `onInk`. Mapping: mic, pause, play, check, copy, edit-3 ("Type a log"), pen-tool (Write mode switch), x, plus, arrow-left, arrow-up (send), message-circle (chats), layers (themes), list (logs).
 
@@ -119,7 +128,7 @@ Archivo is the only family. In React Native, each weight is its own font family 
 |---|---|---|---|---|
 | 01 | Onboarding | `/onboarding` | ink | h1Lg, primary "Get started" |
 | 02 | Sign in with Google | `/sign-in` | ink | secondary "Continue with Google" |
-| 03 | Home | `/` | all | Echo-noticed card, This-week card, 3 section tiles, Capture bar |
+| 03 | Home | `/` | all | avatar + Write pill, date, Echo-noticed card, Logs/Themes/Chats list, themes grid, week timeline, Capture bar |
 | 04 | Capture · recording | `/capture` | ink | timer, Pause/Resume, Done |
 | 05 | Listening back | `/capture` (processing state) | ink | step list |
 | 06 | Result · transcript + copy | `/log/[id]` tab `tx` | logs | Segmented, editable transcript, Copy pill |

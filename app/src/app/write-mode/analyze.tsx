@@ -10,7 +10,7 @@ import { Button } from '@/ui/Button';
 const STEP_MS = 500;
 const BAR_MIN = 12;
 const BAR_HEIGHTS = [20, 37, 54, 31];
-const MARK = 24;
+const MARK = 28;
 
 /** Echo reads the new pieces and files them under styles; moves on to Styles when done. */
 export default function Analyze() {
@@ -18,12 +18,13 @@ export default function Analyze() {
   const insets = useSafeAreaInsets();
   const [stage, setStage] = useState(0);
   const [failed, setFailed] = useState(false);
+  const [alike, setAlike] = useState<boolean | null>(null);
   const count = pieces.filter((p) => !p.analyzed).length;
   const steps = [
     `Read ${count} new ${count === 1 ? 'piece' : 'pieces'}`,
     'Compared tone, length and structure',
     'Sorted into your styles',
-    'Looked for styles that read alike',
+    alike === null ? 'Looking for styles that read alike' : alike ? 'Found 2 styles that read alike' : 'No styles read alike',
   ];
   // Read once: applying the result marks every piece analyzed, which would change `count` mid-run.
   const input = useRef({ pieces, styles });
@@ -35,6 +36,7 @@ export default function Analyze() {
       .then((r) => {
         if (!live) return;
         applyAnalysis(r.styles, r.suggestion);
+        setAlike(!!r.suggestion);
         timers.push(setTimeout(() => router.replace('/write-mode/styles'), STEP_MS * (steps.length + 1)));
       })
       .catch(() => live && setFailed(true));
@@ -46,22 +48,22 @@ export default function Analyze() {
   }, []);
 
   return (
-    <View style={[s.root, { paddingTop: insets.top + space.xxxl, paddingBottom: insets.bottom + space.xl }]}>
+    <View style={[s.root, { paddingTop: insets.top + space.xxl, paddingBottom: insets.bottom + space.xxl }]}>
       <View style={s.bars}>
         {BAR_HEIGHTS.map((h, i) => (
           <View key={i} style={[s.bar, { height: stage > i ? h : BAR_MIN }]} />
         ))}
       </View>
-      <Text style={type.h1}>Reading how{'\n'}you write</Text>
+      <Text style={s.title}>Reading how{'\n'}you write</Text>
       <View style={s.steps}>
         {steps.map((label, i) => {
           const done = stage > i;
           return (
-            <View key={label} style={s.stepRow}>
+            <View key={i} style={s.stepRow}>
               <View style={[s.mark, done && s.markDone]}>
-                <Text style={type.label}>{done ? '✓' : i + 1}</Text>
+                <Text style={type.tab}>{done ? '✓' : i + 1}</Text>
               </View>
-              <Text style={done ? type.bodyStrong : [type.body, { color: colors.textSecondary }]}>{label}</Text>
+              <Text style={[type.bodyStrong, { color: done ? colors.ink : colors.textSecondary }]}>{label}</Text>
             </View>
           );
         })}
@@ -78,15 +80,16 @@ export default function Analyze() {
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: layout.gutter, gap: space.xl },
-  bars: { flexDirection: 'row', alignItems: 'flex-end', gap: space.s, height: 60 },
-  bar: { width: 14, borderRadius: radius.pill, backgroundColor: colors.styles.fill, borderWidth: border.width, borderColor: border.color },
-  steps: { gap: space.l },
-  stepRow: { flexDirection: 'row', alignItems: 'center', gap: space.m, minHeight: 28 },
+  root: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 22, gap: 22, justifyContent: 'center' },
+  bars: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, height: 60 },
+  bar: { width: 28, borderRadius: 8, backgroundColor: colors.styles.fill, borderWidth: border.width, borderColor: border.color },
+  title: { ...type.h1, fontSize: 30, lineHeight: 32 },
+  steps: { gap: space.m },
+  stepRow: { flexDirection: 'row', alignItems: 'center', gap: space.m },
   mark: {
     width: MARK,
     height: MARK,
-    borderRadius: MARK / 2,
+    borderRadius: radius.pill,
     borderWidth: border.width,
     borderColor: border.color,
     backgroundColor: colors.card,
