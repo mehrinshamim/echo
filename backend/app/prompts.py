@@ -19,28 +19,3 @@ ENTRY_USER = """<existing_themes>
 <entry>
 {transcript}
 </entry>"""
-
-ENTRY_SCHEMA = {
-    "type": "object",
-    "additionalProperties": False,
-    "required": ["title", "summary", "insights", "stance", "themes"],
-    "properties": {
-        "title": {"type": "string"},
-        "summary": {"type": "string"},
-        "insights": {"type": "array", "items": {"type": "string"}},
-        "stance": {"type": "string"},
-        "themes": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "additionalProperties": False,
-                "required": ["name", "description", "confidence"],
-                "properties": {
-                    "name": {"type": "string"},
-                    "description": {"type": "string"},
-                    "confidence": {"type": "number"},
-                },
-            },
-        },
-    },
-}

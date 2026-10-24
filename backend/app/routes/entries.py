@@ -2,7 +2,7 @@ import re
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app import llm, prompts
 from app.config import settings
@@ -16,6 +16,22 @@ LIST_FIELDS = "id, title, summary, insights, stance, created_at, themes(id, name
 class EntryIn(BaseModel):
     transcript: str = Field(min_length=1, max_length=settings.max_transcript_chars)
     created_at: datetime | None = None  # only for seeding test data with past dates
+
+
+class ThemeSuggestion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str
+    description: str
+    confidence: float
+
+
+class EntryAnalysis(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title: str
+    summary: str
+    insights: list[str]
+    stance: str
+    themes: list[ThemeSuggestion]
 
 
 def chunk_text(text: str) -> list[str]:
@@ -43,14 +59,14 @@ def chunk_text(text: str) -> list[str]:
     return chunks
 
 
-async def save_themes(user: User, entry_id: str, created_at: datetime, suggested: list[dict]) -> list[dict]:
+async def save_themes(user: User, entry_id: str, created_at: datetime, suggested: list[ThemeSuggestion]) -> list[dict]:
     """Reuse existing themes by name (case-insensitive), create new ones, link them to the entry."""
     res = await user.db.table("themes").select("id, name, last_entry_at").execute()
     existing = {t["name"].lower(): t for t in res.data}
 
     linked, names, seen = [], [], set()
     for t in suggested[: settings.max_themes_per_entry]:
-        key = t["name"].strip().lower()
+        key = t.name.strip().lower()
         if not key or key in seen:
             continue
         seen.add(key)
@@ -58,8 +74,8 @@ async def save_themes(user: User, entry_id: str, created_at: datetime, suggested
         theme = existing.get(key)
         if theme is None:
             ins = await user.db.table("themes").insert({
-                "name": t["name"].strip(),
-                "description": t["description"],
+                "name": t.name.strip(),
+                "description": t.description,
                 "last_entry_at": created_at.isoformat(),
             }).execute()
             theme = ins.data[0]
@@ -68,7 +84,7 @@ async def save_themes(user: User, entry_id: str, created_at: datetime, suggested
                 {"last_entry_at": created_at.isoformat()}
             ).eq("id", theme["id"]).execute()
 
-        linked.append({"entry_id": entry_id, "theme_id": theme["id"], "confidence": t["confidence"]})
+        linked.append({"entry_id": entry_id, "theme_id": theme["id"], "confidence": t.confidence})
         names.append(theme["name"])
 
     if linked:
@@ -113,21 +129,20 @@ async def create_entry(body: EntryIn, user: User = Depends(get_user)):
         settings.model_fast,
         prompts.ENTRY_SYSTEM,
         prompts.ENTRY_USER.format(themes=theme_list, transcript=transcript),
-        prompts.ENTRY_SCHEMA,
-        name="entry",
+        EntryAnalysis,
     )
 
     # 2. One batched embedding call: the summary + every transcript chunk
     chunks = chunk_text(transcript)
-    vectors = await llm.embed([out["summary"], *chunks])
+    vectors = await llm.embed([out.summary, *chunks])
 
     # 3. Save entry, chunks, themes
     ins = await user.db.table("entries").insert({
         "transcript": transcript,
-        "title": out["title"],
-        "summary": out["summary"],
-        "insights": out["insights"],
-        "stance": out["stance"],
+        "title": out.title,
+        "summary": out.summary,
+        "insights": out.insights,
+        "stance": out.stance,
         "embedding": vectors[0],
         "created_at": created_at.isoformat(),
     }).execute()
@@ -137,7 +152,7 @@ async def create_entry(body: EntryIn, user: User = Depends(get_user)):
         {"entry_id": entry["id"], "content": c, "embedding": v} for c, v in zip(chunks, vectors[1:])
     ]).execute()
 
-    themes = await save_themes(user, entry["id"], created_at, out["themes"])
+    themes = await save_themes(user, entry["id"], created_at, out.themes)
 
     # 4. Recurring-thought echoes
     echoes = await find_echoes(user, entry["id"], vectors[0], created_at)
