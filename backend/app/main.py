@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.deps import User, get_user
-from app.routes import home, logs
+from app.routes import chats, home, logs, themes
 
 app = FastAPI(title="Echo API")
 app.add_middleware(
@@ -14,6 +14,8 @@ app.add_middleware(
 )
 app.include_router(logs.router)
 app.include_router(home.router)
+app.include_router(themes.router)
+app.include_router(chats.router)
 
 
 @app.get("/health")

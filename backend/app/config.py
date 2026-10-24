@@ -59,6 +59,17 @@ class Settings(BaseSettings):
     echo_min_age_days: int = 1
     echo_snippet_chars: int = 160
 
+    # Themes: evolution report
+    report_max_logs: int = 60  # newest logs sent to the SMART model
+    report_excerpt_chars: int = 500  # of each log's own words, for then/now quotes
+
+    # Ask
+    max_question_chars: int = 1000
+    ask_top_k: int = 8
+    ask_min_similarity: float = 0.5  # below this, "not in your journal" without an LLM call
+    chat_title_chars: int = 60
+    chat_history_turns: int = 2  # earlier question/answer pairs sent with a follow-up
+
     cors_origins: list[str] = ["*"]
 
     def provider_key(self, provider: str) -> str:
