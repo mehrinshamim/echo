@@ -6,11 +6,15 @@ from datetime import datetime, timezone
 from openai import APIError, AsyncOpenAI, BadRequestError
 from pydantic import BaseModel, ValidationError
 
-from app.config import PROVIDER_URLS, settings
+from app.config import settings
 
 
 def _client(provider: str) -> AsyncOpenAI:
-    return AsyncOpenAI(base_url=PROVIDER_URLS[provider], api_key=settings.provider_key(provider))
+    return AsyncOpenAI(
+        base_url=settings.provider_url(provider),
+        api_key=settings.provider_key(provider),
+        max_retries=settings.llm_max_retries,
+    )
 
 
 chat_client = _client(settings.chat_provider)

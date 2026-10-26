@@ -3,13 +3,15 @@ from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-Provider = Literal["gemini", "openai", "groq"]
+Provider = Literal["gemini", "gemma", "openai", "groq", "ollama"]
 
 # OpenAI-compatible endpoints, so one client works for all of them
 PROVIDER_URLS: dict[str, str] = {
     "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
+    "gemma": "https://generativelanguage.googleapis.com/v1beta/openai/",  # open-weight Gemma, same Gemini API and key
     "openai": "https://api.openai.com/v1",
     "groq": "https://api.groq.com/openai/v1",
+    "ollama": "http://localhost:11434/v1",  # local open-weight models (override with OLLAMA_BASE_URL)
 }
 
 
@@ -25,6 +27,9 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     groq_api_key: str = ""
 
+    # Local Ollama (optional open-weight embeddings); the key is ignored but must be non-empty
+    ollama_base_url: str = PROVIDER_URLS["ollama"]
+
     # Chat: FAST = cheap, frequent jobs; SMART = rare, quality-critical jobs
     chat_provider: Provider = "gemini"
     model_fast: str
@@ -32,9 +37,12 @@ class Settings(BaseSettings):
     # Used for both tiers when the main chat provider errors (leave empty to disable)
     fallback_provider: Provider | None = None
     fallback_model: str = ""
+    # Free-tier cap on chat calls per minute for this process (Gemma 4 on the Gemini API: ~15). 0 = no cap
+    llm_rpm: int = 15
+    llm_max_retries: int = 5  # SDK retries on 429/5xx, with backoff (honours Retry-After)
 
     # Embeddings: changing provider/model means re-embedding all stored data
-    embed_provider: Literal["gemini", "openai"] = "gemini"
+    embed_provider: Literal["gemini", "openai", "ollama"] = "gemini"
     embed_model: str
     embed_dim: int = 768
 
@@ -83,7 +91,16 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["*"]
 
     def provider_key(self, provider: str) -> str:
-        return {"gemini": self.gemini_api_key, "openai": self.openai_api_key, "groq": self.groq_api_key}[provider]
+        return {
+            "gemini": self.gemini_api_key,
+            "gemma": self.gemini_api_key,
+            "openai": self.openai_api_key,
+            "groq": self.groq_api_key,
+            "ollama": "ollama",
+        }[provider]
+
+    def provider_url(self, provider: str) -> str:
+        return self.ollama_base_url if provider == "ollama" else PROVIDER_URLS[provider]
 
 
 settings = Settings()
