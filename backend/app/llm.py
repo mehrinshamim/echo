@@ -1,7 +1,9 @@
 """The only file that talks to LLM providers. Which provider is used is set in .env."""
 
+import asyncio
 import json
 import re
+import time
 from datetime import datetime, timezone
 
 from openai import APIError, AsyncOpenAI, BadRequestError
@@ -23,6 +25,25 @@ embed_client = _client(settings.embed_provider)
 fallback_client = _client(settings.fallback_provider) if settings.fallback_provider else None
 
 
+_call_times: list[float] = []
+_rate_lock = asyncio.Lock()
+
+
+async def _throttle() -> None:
+    """Sliding one-minute window: wait until another chat call fits under settings.llm_rpm."""
+    if not settings.llm_rpm:
+        return
+    async with _rate_lock:  # held while waiting, so parallel callers queue in order
+        while True:
+            now = time.monotonic()
+            while _call_times and now - _call_times[0] >= 60:
+                _call_times.pop(0)
+            if len(_call_times) < settings.llm_rpm:
+                _call_times.append(now)
+                return
+            await asyncio.sleep(60 - (now - _call_times[0]))
+
+
 def _log(model: str, raw: str) -> None:
     # Raw replies, so a bad parse can be debugged in seconds
     settings.llm_log_path.parent.mkdir(exist_ok=True)
@@ -40,6 +61,7 @@ def _extract_json(raw: str) -> str:
 async def _complete(
     client: AsyncOpenAI, provider: str, model: str, system: str, user: str, out: type[BaseModel]
 ) -> str:
+    await _throttle()
     schema = out.model_json_schema()
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
