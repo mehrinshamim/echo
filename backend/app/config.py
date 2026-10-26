@@ -37,8 +37,8 @@ class Settings(BaseSettings):
     # Used for both tiers when the main chat provider errors (leave empty to disable)
     fallback_provider: Provider | None = None
     fallback_model: str = ""
-    # Free-tier cap on chat calls per minute for this process (Gemma 4 on the Gemini API: ~15). 0 = no cap
-    llm_rpm: int = 15
+    # Cap on chat calls per minute for this process (0 = none). Set 15 when CHAT_PROVIDER=gemma (free tier ~15/min)
+    llm_rpm: int = 0
     llm_max_retries: int = 5  # SDK retries on 429/5xx, with backoff (honours Retry-After)
 
     # Embeddings: changing provider/model means re-embedding all stored data

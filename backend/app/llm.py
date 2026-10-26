@@ -52,8 +52,8 @@ def _log(model: str, raw: str) -> None:
 
 
 def _extract_json(raw: str) -> str:
-    """Gemma 4 wraps its answer in <thought>...</thought> and/or ``` fences. Keep just the JSON object."""
-    raw = re.sub(r"<thought>.*?</thought>", "", raw, flags=re.DOTALL)
+    """Gemma 4 wraps its answer in <thought>...</thought> (or <|channel>...<channel|>) and/or ``` fences. Keep just the JSON object."""
+    raw = re.sub(r"<thought>.*?</thought>|<\|channel>.*?<channel\|>", "", raw, flags=re.DOTALL)
     start, end = raw.find("{"), raw.rfind("}")
     return raw[start : end + 1] if 0 <= start < end else raw.strip()
 
