@@ -1,6 +1,7 @@
 """The only file that talks to LLM providers. Which provider is used is set in .env."""
 
 import json
+import re
 from datetime import datetime, timezone
 
 from openai import APIError, AsyncOpenAI, BadRequestError
@@ -29,44 +30,58 @@ def _log(model: str, raw: str) -> None:
         f.write(f"--- {datetime.now(timezone.utc).isoformat()} {model}\n{raw}\n")
 
 
-async def _complete(client: AsyncOpenAI, model: str, system: str, user: str, out: type[BaseModel]) -> str:
+def _extract_json(raw: str) -> str:
+    """Gemma 4 wraps its answer in <thought>...</thought> and/or ``` fences. Keep just the JSON object."""
+    raw = re.sub(r"<thought>.*?</thought>", "", raw, flags=re.DOTALL)
+    start, end = raw.find("{"), raw.rfind("}")
+    return raw[start : end + 1] if 0 <= start < end else raw.strip()
+
+
+async def _complete(
+    client: AsyncOpenAI, provider: str, model: str, system: str, user: str, out: type[BaseModel]
+) -> str:
     schema = out.model_json_schema()
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
-    try:
-        res = await client.chat.completions.create(
-            model=model,
-            messages=messages,
-            response_format={
-                "type": "json_schema",
-                "json_schema": {"name": out.__name__, "schema": schema, "strict": True},
-            },
-        )
-    except BadRequestError:
-        # Provider/model without strict schema support: plain JSON mode, schema in the prompt
+
+    async def loose():
+        # JSON mode with the schema in the prompt, for models without reliable strict schema support
         messages[0]["content"] += f"\n\nReply with only a JSON object matching this schema:\n{json.dumps(schema)}"
-        res = await client.chat.completions.create(
-            model=model, messages=messages, response_format={"type": "json_object"}
-        )
+        return await client.chat.completions.create(model=model, messages=messages, response_format={"type": "json_object"})
+
+    if provider == "gemma":  # accepts strict schemas but doesn't honour them (stray fences), so skip
+        res = await loose()
+    else:
+        try:
+            res = await client.chat.completions.create(
+                model=model,
+                messages=messages,
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {"name": out.__name__, "schema": schema, "strict": True},
+                },
+            )
+        except BadRequestError:
+            res = await loose()
     raw = res.choices[0].message.content or ""
     _log(model, raw)
-    return raw
+    return _extract_json(raw)
 
 
 async def chat_json[T: BaseModel](model: str, system: str, user: str, out: type[T]) -> T:
     """One chat call whose reply is validated into `out`. Retries once on bad JSON,
     and once on the fallback provider if the main provider errors."""
-    client = chat_client
+    client, provider = chat_client, settings.chat_provider
     try:
-        raw = await _complete(client, model, system, user, out)
+        raw = await _complete(client, provider, model, system, user, out)
     except APIError:
         if not fallback_client:
             raise
-        client, model = fallback_client, settings.fallback_model
-        raw = await _complete(client, model, system, user, out)
+        client, provider, model = fallback_client, settings.fallback_provider, settings.fallback_model
+        raw = await _complete(client, provider, model, system, user, out)
     try:
         return out.model_validate_json(raw)
     except ValidationError:
-        raw = await _complete(client, model, system, user, out)
+        raw = await _complete(client, provider, model, system, user, out)
         return out.model_validate_json(raw)
 
 
